@@ -3,12 +3,15 @@ package com.example.demra.moose_scrollevaluation;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.constraintlayout.widget.ConstraintLayout;
 
+import android.content.Context;
 import android.graphics.Color;
 import android.os.Bundle;
+import android.os.Vibrator;
 import android.util.TypedValue;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.WindowManager;
+import android.widget.ImageButton;
 import android.widget.TextView;
 
 import com.example.demra.moose_scrollevaluation.HelperClasses.Communicator;
@@ -45,12 +48,21 @@ public class MooseActivity extends AppCompatActivity {
     private double[] p1;
     private double[] p2;
     private double[] p3;
-    private int circlePointCounter;
+    private int touchCounter;
 
     //For Flicking
     private long downTime;
     private int totalDistance;
     private Boolean autoscroll;
+
+    //For Rubbing
+    private int rubbingDirection;
+
+    //EXTRA
+    private final int SCROLLWHEEL_NOTCH_SIZE_MM = 1;
+    int notchSize_px;
+    private ImageButton scrollWheel;
+    private Vibrator v;
 
 
     @Override
@@ -81,6 +93,24 @@ public class MooseActivity extends AppCompatActivity {
         communicator = Communicator.getInstance();
         communicator.setActivity(this);
 
+        //SCROLL WHEEL THINGS
+        scrollWheel = findViewById(R.id.scrollWheel);
+        scrollWheel.getLayoutParams().height = touchAreaHeight;
+        scrollWheel.getLayoutParams().width = (touchAreaHeight) / 4;
+        scrollWheel.setVisibility(View.INVISIBLE);
+        notchSize_px = (int) TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_MM, SCROLLWHEEL_NOTCH_SIZE_MM, getResources().getDisplayMetrics());
+        //Scroll Effects
+        v = (Vibrator) this.getSystemService(Context.VIBRATOR_SERVICE);
+        scrollWheel.setOnTouchListener(new View.OnTouchListener() {
+            @Override
+            public boolean onTouch(View view, MotionEvent motionEvent) {
+                //check if mode is set and not paging (paging is implemented on buttons directly
+                if(mode.equals("ScrollWheel")) {
+                    scrollWheel_Action(motionEvent.getRawY(), motionEvent.getAction());
+                }
+                return true;
+            }
+        });
     }
 
     @Override
@@ -95,13 +125,16 @@ public class MooseActivity extends AppCompatActivity {
             // System.out.println("ID " + actionIndex + " pressure: " + event.getPressure(actionIndex));
             // System.out.println("Finger DOWN: " + event.getPointerId(actionIndex) + " at pos: " + pointerX + "/" + pointerY);
 
-            if(isPointInsideView(pointerX, pointerY, touchView)){
+            if(isPointInsideView(pointerX, pointerY, scrollWheel) && mode.equals("ScrollWheel")){
+                scrollWheel_Action(pointerY, MotionEvent.ACTION_DOWN);
+
+            }else if(isPointInsideView(pointerX, pointerY, touchView)){
                 int maxLeftX = 2*(touchView.getWidth()/3);
 
                 if(event.getPointerCount() > 1){
                     if(isMostLeft(event, actionIndex, event.getPointerCount())){
                         // System.out.println("TOUCH DOWN left Finger in TouchView!");
-                        touchAction(pointerX, pointerY, MotionEvent.ACTION_DOWN, true);
+                        touchAction(pointerX, pointerY, MotionEvent.ACTION_DOWN);
 
                     }else{
                         // System.out.println("TOUCH DOWN right Finger in TouchView!");
@@ -111,7 +144,7 @@ public class MooseActivity extends AppCompatActivity {
                 //If only one finger it should be in the left part of the screen
                 } else if (pointerX <  maxLeftX ) {
                     //  System.out.println("TOUCH DOWN one Finger in TouchView!");
-                    return touchAction(pointerX, pointerY, MotionEvent.ACTION_DOWN, false);
+                    return touchAction(pointerX, pointerY, MotionEvent.ACTION_DOWN);
                 }
             }
 
@@ -133,13 +166,16 @@ public class MooseActivity extends AppCompatActivity {
                     // System.out.println("Finger moved: " + pointerId + " at pos: " + pointerX + "/" + pointerY);
                     // System.out.println("ID " + i + " pressure: " + event.getPressure(i));
 
-                    if (isPointInsideView(pointerX, pointerY, touchView)) {
+                    if(isPointInsideView(pointerX, pointerY, scrollWheel) && mode.equals("ScrollWheel")){
+                        scrollWheel_Action( pointerY, MotionEvent.ACTION_MOVE);
+
+                    }else if (isPointInsideView(pointerX, pointerY, touchView)) {
                         int maxLeftX = 2*(touchView.getWidth()/3);
 
                         if(event.getPointerCount() > 1){
                             if(isMostLeft(event, i, pointerCount)){
                                 // System.out.println("MOVED left Finger in TouchView!");
-                                touchAction(pointerX, pointerY, MotionEvent.ACTION_MOVE, true);
+                                touchAction(pointerX, pointerY, MotionEvent.ACTION_MOVE);
 
                             }else{
                                 // System.out.println("MOVED right Finger in TouchView!");
@@ -149,7 +185,7 @@ public class MooseActivity extends AppCompatActivity {
                         //If only one finger it should be in the left part of the screen
                         } else if (pointerX <  maxLeftX )  {
                             // System.out.println("MOVED the only Finger in TouchView!");
-                            return touchAction(pointerX, pointerY, MotionEvent.ACTION_MOVE, false);
+                            return touchAction(pointerX, pointerY, MotionEvent.ACTION_MOVE);
 
                         }
 
@@ -165,7 +201,11 @@ public class MooseActivity extends AppCompatActivity {
             float pointerY = event.getY(actionIndex);
 
             //Check Target View
-            if (isPointInsideView(pointerX, pointerY, touchView)) {
+            if(isPointInsideView(pointerX, pointerY, scrollWheel) && mode.equals("ScrollWheel")){
+                scrollWheel_Action( pointerY, MotionEvent.ACTION_UP);
+
+
+            }else if (isPointInsideView(pointerX, pointerY, touchView)) {
 
                 int maxLeftX = 2*(touchView.getWidth()/3);
 
@@ -173,7 +213,7 @@ public class MooseActivity extends AppCompatActivity {
                     //not sure if action index is the right but it seems to work
                     if(isMostLeft(event, actionIndex, event.getPointerCount())){
                         //  System.out.println("UP left Finger in TouchView!");
-                        touchAction(pointerX, pointerY, MotionEvent.ACTION_UP, true);
+                        touchAction(pointerX, pointerY, MotionEvent.ACTION_UP);
 
                     }else{
                         //   System.out.println("UP right Finger in TouchView!");
@@ -182,7 +222,7 @@ public class MooseActivity extends AppCompatActivity {
 
                 //If only one finger it should be in the left part of the screen
                 } else if (pointerX <  maxLeftX )  {
-                    return touchAction(pointerX, pointerY, MotionEvent.ACTION_UP, false);
+                    return touchAction(pointerX, pointerY, MotionEvent.ACTION_UP);
 
                 }
 
@@ -231,7 +271,7 @@ public class MooseActivity extends AppCompatActivity {
         return !isLeft;
     }
 
-    public Boolean touchAction(float x, float y, int actionType, boolean multiTouch){
+    public Boolean touchAction(float x, float y, int actionType){
         if(actionType == MotionEvent.ACTION_DOWN) {
             // System.out.println("Finger down: " + motionEvent.getActionIndex());
             scrolling = false;
@@ -251,7 +291,13 @@ public class MooseActivity extends AppCompatActivity {
                 p1 = new double[] {x,y};
                 p2 = new double[]{};
                 p3 = new double[]{};
-                circlePointCounter = 1;
+                touchCounter = 1;
+
+            }else if(mode.equals("Rubbing")){
+                rubbingDirection = 0;
+
+            }else if(mode.equals("Drag")){
+                touchCounter = 1;
             }
 
         }else if(actionType == MotionEvent.ACTION_MOVE){
@@ -275,6 +321,35 @@ public class MooseActivity extends AppCompatActivity {
                 newMessage.setValue(String.valueOf(deltaY));
                 communicator.sendMessage(newMessage.makeMessage());
 
+            }else if(mode.equals("Drag")) {
+                if (touchCounter % 5 == 0) {
+                    //** calculations
+                    double deltaY = newYposition - lastYposition;
+                    lastYposition = newYposition;
+
+                    double dragDelta = deltaY * -1;
+
+                    //** send information
+                    Message newMessage = new Message("client", "Drag", "deltaY");
+                    newMessage.setValue(String.valueOf(dragDelta));
+                    communicator.sendMessage(newMessage.makeMessage());
+                }
+                touchCounter++;
+
+            } else if(mode.equals("Thumb")){
+                if(touchCounter % 5 == 0) {
+                    //** calculations
+                    double deltaY = newYposition - lastYposition;
+                    lastYposition = newYposition;
+                    
+
+                    //** send information
+                    Message newMessage = new Message("client", "Thumb", "deltaY");
+                    newMessage.setValue(String.valueOf(deltaY));
+                    communicator.sendMessage(newMessage.makeMessage());
+                }
+                touchCounter++;
+
             } else if (mode.equals("Flick")) {
 
                 //** calculations
@@ -297,8 +372,8 @@ public class MooseActivity extends AppCompatActivity {
 
 
             }else if(mode.equals("Circle3")){
-                circlePointCounter++; //skip some points to make it smoother
-                if(circlePointCounter % 5 == 0) {
+                touchCounter++; //skip some points to make it smoother
+                if(touchCounter % 5 == 0) {
                     if (p2.length == 0) {
                         p2 = new double[]{x, y};
 
@@ -312,6 +387,27 @@ public class MooseActivity extends AppCompatActivity {
                         calculateAndSendAngle_2();
                     }
                 }
+
+            }else if(mode.equals("Rubbing")){
+                double deltaY = newYposition - lastYposition;
+                lastYposition = newYposition;
+
+                if(rubbingDirection == 0){
+                    if(deltaY > 0) {
+                        rubbingDirection = 1;
+                    }else if (deltaY<0){
+                        rubbingDirection = -1;
+                    }
+                }
+
+                double sendVal = Math.abs(deltaY)*rubbingDirection;
+
+                //** send information
+                Message newMessage = new Message("client", "Rubbing", "deltaY");
+                newMessage.setValue(String.valueOf(sendVal));
+                communicator.sendMessage(newMessage.makeMessage());
+
+
             }
 
         }else if(actionType == MotionEvent.ACTION_UP){
@@ -345,6 +441,34 @@ public class MooseActivity extends AppCompatActivity {
         }
         return scrolling;
 
+    }
+
+    public void scrollWheel_Action (float y, int actionType){
+        if (actionType == MotionEvent.ACTION_DOWN) {
+            lastYposition = y;
+
+        } else if (actionType == MotionEvent.ACTION_MOVE) {
+
+            double newYposition = y;
+            //check if still touching scroll wheel
+            if((scrollWheel.getY() <= newYposition) && ((scrollWheel.getY()+scrollWheel.getHeight()) >= newYposition)) {
+                //** calculations
+                double deltaY = newYposition - lastYposition;
+                if (Math.abs(deltaY) >= notchSize_px) {
+                    int deltaNotches = (int) deltaY / notchSize_px;
+
+                    v.vibrate(10);
+
+                    //** send information
+                    Message newMessage = new Message("client", "ScrollWheel", "deltaNotches");
+                    newMessage.setValue(String.valueOf(deltaNotches));
+                    communicator.sendMessage(newMessage.makeMessage());
+
+                    lastYposition = lastYposition + (deltaNotches * notchSize_px);
+                }
+            }
+
+        }
     }
 
     public Boolean rightTouchAction(float x, float y, int actionType){
@@ -427,6 +551,12 @@ public class MooseActivity extends AppCompatActivity {
             if(m.getActionType().equals("Mode")) {
                 mode = m.getActionName();
                 tvInfo.setText("Mode is: " + mode);
+
+                if(mode.equals("ScrollWheel")){
+                    scrollWheel.setVisibility(View.VISIBLE);
+                }else{
+                    scrollWheel.setVisibility(View.INVISIBLE);
+                }
 
             }else if(m.getActionType().equals("Back")){
                 onBackPressed();
