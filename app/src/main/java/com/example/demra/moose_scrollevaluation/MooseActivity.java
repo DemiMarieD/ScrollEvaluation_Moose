@@ -18,6 +18,7 @@ import com.example.demra.moose_scrollevaluation.HelperClasses.Communicator;
 import com.example.demra.moose_scrollevaluation.HelperClasses.Message;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Vector;
 
@@ -57,12 +58,26 @@ public class MooseActivity extends AppCompatActivity {
 
     //For Rubbing
     private int rubbingDirection;
+    private int initialDirection;
+    private double turnPointY;
+    private Boolean firstStroke;
+    private List<Double> frequencies;
+    private long T1;
+    private int k = 2/3; //constant optimized empirically by Malacria
 
     //EXTRA
     private final int SCROLLWHEEL_NOTCH_SIZE_MM = 1;
     int notchSize_px;
     private ImageButton scrollWheel;
     private Vibrator v;
+
+    //TWO FINGER
+    private Boolean leftFingerMoving;
+    private Boolean rightFingerMoving = false;
+    private float rightFingerPositionY = 0;
+    private int leftFinger = 0;
+    private int rightFinger = 0;
+    private int[] deltaMove = new int[]{0, 0}; //0 = left 1= right
 
 
     @Override
@@ -295,12 +310,16 @@ public class MooseActivity extends AppCompatActivity {
 
             }else if(mode.equals("Rubbing")){
                 rubbingDirection = 0;
+                frequencies = new ArrayList<>(Arrays.asList(0.0, 0.0));
+                T1 = System.currentTimeMillis();
+                firstStroke = true;
 
-            }else if(mode.equals("Drag")){
+            }else if(mode.equals("Drag")||mode.equals("Thumb")){
                 touchCounter = 1;
             }
 
         }else if(actionType == MotionEvent.ACTION_MOVE){
+            leftFingerMoving = true;
             scrolling = true;
             double newYposition = y;
             double maxY = touchView.getY() + touchView.getHeight();
@@ -337,11 +356,11 @@ public class MooseActivity extends AppCompatActivity {
                 touchCounter++;
 
             } else if(mode.equals("Thumb")){
-                if(touchCounter % 5 == 0) {
+                if(touchCounter % 2 == 0) {
                     //** calculations
                     double deltaY = newYposition - lastYposition;
                     lastYposition = newYposition;
-                    
+
 
                     //** send information
                     Message newMessage = new Message("client", "Thumb", "deltaY");
@@ -390,27 +409,70 @@ public class MooseActivity extends AppCompatActivity {
 
             }else if(mode.equals("Rubbing")){
                 double deltaY = newYposition - lastYposition;
-                lastYposition = newYposition;
 
-                if(rubbingDirection == 0){
-                    if(deltaY > 0) {
+                if(deltaY > 0) {
+                    if(rubbingDirection == 0){
                         rubbingDirection = 1;
-                    }else if (deltaY<0){
+                        initialDirection = rubbingDirection;
+
+                    }else if(rubbingDirection < 0){
+                        System.out.println("Direction changed");
+                        if(!firstStroke){
+                            /*if(! sendNewStroke(turnPointY, lastYposition)){
+                                //if to slow reset to first stroke ?!
+                                firstStroke = true;
+                            }*/
+                            sendNewStroke(turnPointY, lastYposition);
+                        }else{
+                            firstStroke = false;
+                            //since first Stroke is normal drag no info needs to be send
+                            T1 = System.currentTimeMillis();
+                        }
+
+                        turnPointY = lastYposition;
+                        rubbingDirection = 1;
+                    }
+
+                }else if (deltaY < 0){
+                    if(rubbingDirection == 0){
+                        rubbingDirection = -1;
+                        initialDirection = rubbingDirection;
+
+                    }else if(rubbingDirection > 0){
+                        System.out.println("Direction changed");
+
+                        if(!firstStroke){
+                            sendNewStroke(turnPointY, lastYposition);
+                        }else{
+                            firstStroke = false;
+                            //since first Stroke is normal drag no info needs to be send
+                            T1 = System.currentTimeMillis();
+                        }
+
+                        turnPointY = lastYposition;
                         rubbingDirection = -1;
                     }
                 }
 
-                double sendVal = Math.abs(deltaY)*rubbingDirection;
+                if(firstStroke){
+                    //standard drag with gain 1;
+                    //** send information
+                    Message newMessage = new Message("client", "Rubbing", "deltaY");
+                    newMessage.setValue(String.valueOf(deltaY));
+                    communicator.sendMessage(newMessage.makeMessage());
+                }
 
-                //** send information
-                Message newMessage = new Message("client", "Rubbing", "deltaY");
-                newMessage.setValue(String.valueOf(sendVal));
-                communicator.sendMessage(newMessage.makeMessage());
+                //for all:
+                lastYposition =  newYposition;
 
 
+            }else if(mode.equals("TwoFinger")){
+                if(rightFingerMoving){System.out.print("Two Finger moving!"); }
+                System.out.println("-- Left: " + y +  " Right:" + rightFingerPositionY);
             }
 
         }else if(actionType == MotionEvent.ACTION_UP){
+            leftFingerMoving = false;
             if(!scrolling){
                 System.out.println("Click!");
                 Message newMessage = new Message("client", "Action", "click");
@@ -440,6 +502,39 @@ public class MooseActivity extends AppCompatActivity {
             System.out.println("Other action <" + actionType + "> detected.");
         }
         return scrolling;
+
+    }
+
+    public Boolean sendNewStroke(double last_TurnPoint, double lastY_beforeTurn){
+        long deltaTime = System.currentTimeMillis() - T1;
+        System.out.println("Delta T = " + deltaTime + "ms ");
+        T1 = System.currentTimeMillis();
+
+        double amplitude = Math.abs(lastY_beforeTurn - last_TurnPoint);
+        System.out.println("Amplitude = " + amplitude);
+
+        //if speed exceeds 50 px / sec
+        if(amplitude/deltaTime >  50000) {
+            double currentFrequency = 1 / (2 * deltaTime);
+            double sumFrequencies = frequencies.get(0) + frequencies.get(1) + currentFrequency;
+            double gain = Math.max(1, k * ((float) 1 / 3) * sumFrequencies);
+            System.out.println("Gain = " + gain);
+            double distance = gain * amplitude * initialDirection;
+
+            //** send information
+            Message newMessage = new Message("client", "Rubbing", "deltaY");
+            newMessage.setValue(String.valueOf(distance));
+            communicator.sendMessage(newMessage.makeMessage());
+
+            frequencies.set(1, frequencies.get(0));
+            frequencies.set(0, currentFrequency);
+
+            return true;
+
+        }else{
+            System.out.println(" TOO SLOW ! ");
+            return false;
+        }
 
     }
 
@@ -474,11 +569,16 @@ public class MooseActivity extends AppCompatActivity {
     public Boolean rightTouchAction(float x, float y, int actionType){
         if(actionType == MotionEvent.ACTION_DOWN){
             System.out.println("Right Finger Down");
+            rightFingerPositionY = y;
 
         }else if(actionType == MotionEvent.ACTION_MOVE){
-            System.out.println("Right Finger Moved");
+            rightFingerMoving = true;
+            deltaMove[rightFinger] += y - rightFingerPositionY;
+            rightFingerPositionY = y;
+          //  System.out.println("Right Finger Moved");
 
         }else if(actionType == MotionEvent.ACTION_UP){
+            rightFingerMoving = false;
             System.out.println("Right Finger Up");
 
         }  else {
