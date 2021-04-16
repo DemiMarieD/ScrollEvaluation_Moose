@@ -24,7 +24,7 @@ import java.util.Vector;
 
 public class MooseActivity extends AppCompatActivity {
 
-    private final int TOUCH_AREA_HEIGHT_MM = 50; //mm = 5cm
+    private final int TOUCH_AREA_HEIGHT_MM = 70; //mm = 5cm
     private int touchAreaHeight; //px 600 might be best
 
     private Communicator communicator;
@@ -102,6 +102,7 @@ public class MooseActivity extends AppCompatActivity {
         tvInfo.setText("Please select Mode on PC");
 
         autoscroll = false;
+        firstStroke = true;
        // trackPointFixed = false;
 
         // ------ Set up communication
@@ -204,6 +205,8 @@ public class MooseActivity extends AppCompatActivity {
 
                         }
 
+                    }else{
+                        //todo stop for rate-based / trackpoint
                     }
                     break; //break for because we found the moving pointer!
                 }
@@ -241,7 +244,8 @@ public class MooseActivity extends AppCompatActivity {
 
                 }
 
-
+            }else{
+                //todo stop for rate-based / trackpoint
             }
 
         }
@@ -489,6 +493,7 @@ public class MooseActivity extends AppCompatActivity {
                 // if faster then 0.5sec
                 if(deltaTime < 501){
                     System.out.println("It was a flick!");
+                    totalDistance += y-lastYposition;
                     double speed = totalDistance/deltaTime; // px/ms
                     autoscroll = true;
                     //** send information
@@ -507,15 +512,17 @@ public class MooseActivity extends AppCompatActivity {
 
     public Boolean sendNewStroke(double last_TurnPoint, double lastY_beforeTurn){
         long deltaTime = System.currentTimeMillis() - T1;
+        double deltaT_sec = (double) deltaTime/1000;
         System.out.println("Delta T = " + deltaTime + "ms ");
+        System.out.println("Delta T = " + (double) deltaTime/1000 + "s ");
         T1 = System.currentTimeMillis();
 
         double amplitude = Math.abs(lastY_beforeTurn - last_TurnPoint);
         System.out.println("Amplitude = " + amplitude);
 
         //if speed exceeds 50 px / sec
-        if(amplitude/deltaTime >  50000) {
-            double currentFrequency = 1 / (2 * deltaTime);
+        if(amplitude/deltaT_sec >  50) {
+            double currentFrequency = 1 / (2 * deltaT_sec);
             double sumFrequencies = frequencies.get(0) + frequencies.get(1) + currentFrequency;
             double gain = Math.max(1, k * ((float) 1 / 3) * sumFrequencies);
             System.out.println("Gain = " + gain);
