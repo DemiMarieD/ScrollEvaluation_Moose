@@ -13,6 +13,7 @@ import android.view.MotionEvent;
 import android.view.View;
 import android.view.WindowManager;
 import android.widget.ImageButton;
+import android.widget.SeekBar;
 import android.widget.TextView;
 
 import com.example.demra.moose_scrollevaluation.HelperClasses.Communicator;
@@ -32,6 +33,8 @@ public class MooseActivity extends AppCompatActivity {
     private ConstraintLayout touchView;
 
     private TextView tvInfo;
+    private TextView gainLable;
+    private SeekBar seekbar_gain;
 
     private String mode = "";
 
@@ -112,6 +115,32 @@ public class MooseActivity extends AppCompatActivity {
         // ------ Set up communication
         communicator = Communicator.getInstance();
         communicator.setActivity(this);
+
+        //SETTINGS INPUTS
+        seekbar_gain = findViewById(R.id.seekBar_gain);
+        gainLable = findViewById(R.id.gainLable);
+        seekbar_gain.setVisibility(View.INVISIBLE);
+        gainLable.setVisibility(View.INVISIBLE);
+
+        seekbar_gain.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+            @Override
+            public void onProgressChanged(SeekBar seekBar, int i, boolean b) {
+                gainLable.setText("Gain: " + i);
+                System.out.println("Gain: " + seekbar_gain.getProgress());
+                gainFactor = seekbar_gain.getProgress();
+            }
+
+            @Override
+            public void onStartTrackingTouch(SeekBar seekBar) {
+
+            }
+
+            @Override
+            public void onStopTrackingTouch(SeekBar seekBar) {
+
+            }
+        });
+
 
         //SCROLL WHEEL THINGS
         scrollWheel = findViewById(R.id.scrollWheel);
@@ -558,8 +587,6 @@ public class MooseActivity extends AppCompatActivity {
 
     }
 
-
-
     public void sendNewStroke(double amplitude, double deltaT_sec){
         double currentFrequency = 1 / (2 * deltaT_sec);
         double sumFrequencies = frequencies.get(0) + frequencies.get(1) + currentFrequency;
@@ -655,8 +682,7 @@ public class MooseActivity extends AppCompatActivity {
         //*************************************************
 
         //scrolling distance = angle * R / 2pi; R = 220px [2014]
-        int R = 100; //px  - 100 is not as fast, better for small movements
-        double scrollingDistance = angle*R / 2*Math.PI;
+        double scrollingDistance = angle*gainFactor / 2*Math.PI;
         //System.out.println("Scrolling distance: " + scrollingDistance);
 
         //direction = sign of dot product v1 v2
@@ -680,15 +706,25 @@ public class MooseActivity extends AppCompatActivity {
     }
 
     private void setParameter(){
+        seekbar_gain.setVisibility(View.INVISIBLE);
+        gainLable.setVisibility(View.INVISIBLE);
+
         switch (mode) {
             case "Drag": {
                 ithPoint = 5;
                 gainFactor = 1; //linear
+                seekbar_gain.setProgress(1);
+                seekbar_gain.setMax(10);
+                //seekbar_gain.setMin(1);
+                gainLable.setText("Gain: " + gainFactor);
+                seekbar_gain.setVisibility(View.VISIBLE);
+                gainLable.setVisibility(View.VISIBLE);
+
                 break;
             }
             case "DragAcceleration": {
                 ithPoint = 5;
-                gainFactor = 0.3; //is used in conjunction with speed 
+                gainFactor = 0.3; //is used in conjunction with speed
                 break;
             }
             case "Thumb":{
@@ -704,7 +740,7 @@ public class MooseActivity extends AppCompatActivity {
             }
             case "Circle3": {
                 ithPoint = 5;
-
+                gainFactor = 100; //multiplied with angle, the higher the faster; R = 220px [2014]
                 break;
             }
             case "Rubbing": {
