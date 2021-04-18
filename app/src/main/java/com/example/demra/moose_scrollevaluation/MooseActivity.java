@@ -51,7 +51,8 @@ public class MooseActivity extends AppCompatActivity {
     private double[] p2;
     private double[] p3;
     private int touchPointCounter;
-    private int ithPoint = 5;
+    private int ithPoint;  //used for
+    private double gainFactor; // used by rate-based
 
     //For Flicking
     private long downTime;
@@ -213,7 +214,7 @@ public class MooseActivity extends AppCompatActivity {
                         Message newMessage = new Message("client", "TrackPoint", "stop");
                         communicator.sendMessage(newMessage.makeMessage());
                     }
-                    
+
                     break; //break for because we found the moving pointer!
                 }
             }
@@ -331,8 +332,13 @@ public class MooseActivity extends AppCompatActivity {
                     turnPointY = y;
 
                     break;
-                case "Drag":
+
+                case "DragAcceleration":
+                    touchPointCounter = 1;
+                    T1 = System.currentTimeMillis();
+
                 case "Thumb":
+                case "Drag":
                     touchPointCounter = 1;
                     break;
             }
@@ -349,26 +355,13 @@ public class MooseActivity extends AppCompatActivity {
 
 
             switch (mode) {
-                case "Scroll": {
-
-                    //** calculations
-                    double deltaY = newYposition - lastYposition;
-                    lastYposition = newYposition;
-
-                    //** send information
-                    Message newMessage = new Message("client", "Scroll", "deltaY");
-                    newMessage.setValue(String.valueOf(deltaY));
-                    communicator.sendMessage(newMessage.makeMessage());
-
-                    break;
-                }
                 case "Drag":
                     if (touchPointCounter % ithPoint == 0) {
                         //** calculations
                         double deltaY = newYposition - lastYposition;
                         lastYposition = newYposition;
 
-                        double dragDelta = deltaY * -1;
+                        double dragDelta = deltaY * gainFactor * -1;
 
                         //** send information
                         Message newMessage = new Message("client", "Drag", "deltaY");
@@ -376,6 +369,38 @@ public class MooseActivity extends AppCompatActivity {
                         communicator.sendMessage(newMessage.makeMessage());
                     }
                     touchPointCounter++;
+
+                    break;
+
+                case "DragAcceleration":
+                    if (touchPointCounter % ithPoint == 0) {
+                        //** calculations
+                        double deltaY = newYposition - lastYposition;
+                        lastYposition = newYposition;
+
+                        double speed = deltaY / (System.currentTimeMillis() - T1);
+                        System.out.println("speed " + speed);
+
+                        /*
+                        double deltaT_sec = (double) ((System.currentTimeMillis() - T1)/1000);
+                        double frequency =  (double) 1 / (2 * deltaT_sec); //like in rubbing used by [Mal..2012]
+                        System.out.println("frequency " + frequency);
+                        double gain = k*frequency;
+                        System.out.println("gain " + gain);
+                        */
+
+                        double gain = Math.abs(speed / gainFactor) ;
+                        System.out.println("gain " + gain);
+
+                        double dragDelta = deltaY * gain * -1;
+
+                        //** send information
+                        Message newMessage = new Message("client", "DragAcceleration", "deltaY");
+                        newMessage.setValue(String.valueOf(dragDelta));
+                        communicator.sendMessage(newMessage.makeMessage());
+                    }
+                    touchPointCounter++;
+                    T1 = System.currentTimeMillis();
 
                     break;
                 case "Thumb":
@@ -408,19 +433,22 @@ public class MooseActivity extends AppCompatActivity {
                     break;
                 }
                 case "TrackPoint": {
-                    float deltaY = (float) (newYposition - lastYposition); //lastPosition is not changing ! so equal start pos.
-                    double gainFactor = 1.3;
-                    double deltaMove = Math.pow(Math.abs(deltaY), gainFactor) / 1000; //to get per sec ?!
-                    int direction = (int) (deltaY/Math.abs(deltaY));
+                   if (touchPointCounter % ithPoint == 0) {
+                        float deltaY = (float) (newYposition - lastYposition); //lastPosition is not changing ! so equal start pos.
+                        double gainFactor = 1.5; // 1.3 used in multi-scroll by cockburn
+                        double deltaMove = Math.pow(Math.abs(deltaY), gainFactor) / 1000; //to get per sec ?!
+                        int direction = (int) (deltaY/Math.abs(deltaY));
 
-                    //** send information
-                    Message newMessage = new Message("client", "TrackPoint", "deltaY");
-                    newMessage.setValue(String.valueOf(deltaMove*direction));
-                    communicator.sendMessage(newMessage.makeMessage());
+                        //** send information
+                        Message newMessage = new Message("client", "TrackPoint", "deltaY");
+                        newMessage.setValue(String.valueOf(deltaMove*direction));
+                        communicator.sendMessage(newMessage.makeMessage());
+                   }
+                    touchPointCounter++;
 
                     break;
                 }
-                case "Circle3":
+                case "Circle3": {
                     touchPointCounter++; //skip some points to make it smoother
 
                     if (touchPointCounter % ithPoint == 0) {
@@ -439,6 +467,7 @@ public class MooseActivity extends AppCompatActivity {
                     }
 
                     break;
+                }
                 case "Rubbing": {
                     double deltaY = newYposition - lastYposition;
                     long deltaTime = System.currentTimeMillis() - timeLastMoved;
@@ -650,6 +679,47 @@ public class MooseActivity extends AppCompatActivity {
         communicator.sendMessage(newMessage.makeMessage());
     }
 
+    private void setParameter(){
+        switch (mode) {
+            case "Drag": {
+                ithPoint = 5;
+                gainFactor = 1; //linear
+                break;
+            }
+            case "DragAcceleration": {
+                ithPoint = 5;
+                gainFactor = 0.3; //is used in conjunction with speed 
+                break;
+            }
+            case "Thumb":{
+                ithPoint = 5;
+
+                break;
+            }
+            case "TrackPoint": {
+                ithPoint = 1;
+                gainFactor = 1.5; //exponential  [ 1.3 used in multi-scroll by cockburn ]
+
+                break;
+            }
+            case "Circle3": {
+                ithPoint = 5;
+
+                break;
+            }
+            case "Rubbing": {
+
+                break;
+            }
+            case "Flick": {
+
+                break;
+            }
+        }
+
+
+    }
+
     @Override
     public void onContentChanged() {
         super.onContentChanged();
@@ -666,6 +736,8 @@ public class MooseActivity extends AppCompatActivity {
                 }else{
                     scrollWheel.setVisibility(View.INVISIBLE);
                 }
+
+                setParameter();
 
             }else if(m.getActionType().equals("Back")){
                 onBackPressed();
