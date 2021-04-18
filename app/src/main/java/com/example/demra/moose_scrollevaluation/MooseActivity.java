@@ -7,6 +7,7 @@ import android.content.Context;
 import android.graphics.Color;
 import android.os.Bundle;
 import android.os.Vibrator;
+import android.provider.Settings;
 import android.util.TypedValue;
 import android.view.MotionEvent;
 import android.view.View;
@@ -49,7 +50,8 @@ public class MooseActivity extends AppCompatActivity {
     private double[] p1;
     private double[] p2;
     private double[] p3;
-    private int touchCounter;
+    private int touchPointCounter;
+    private int ithPoint = 5;
 
     //For Flicking
     private long downTime;
@@ -63,6 +65,7 @@ public class MooseActivity extends AppCompatActivity {
     private Boolean firstStroke;
     private List<Double> frequencies;
     private long T1;
+    private long timeLastMoved;
     private int k = 2/3; //constant optimized empirically by Malacria
 
     //EXTRA
@@ -297,29 +300,36 @@ public class MooseActivity extends AppCompatActivity {
             lastYposition = y;
             startXposition = x;
 
-            if(mode.equals("Flick")){
-                downTime = System.currentTimeMillis();
-                totalDistance = 0;
-                if (autoscroll){
-                    Message newMessage = new Message("client", mode, "stop");
-                    communicator.sendMessage(newMessage.makeMessage());
-                    autoscroll = false;
-                }
+            switch (mode) {
+                case "Flick":
+                    downTime = System.currentTimeMillis();
+                    totalDistance = 0;
+                    if (autoscroll) {
+                        Message newMessage = new Message("client", mode, "stop");
+                        communicator.sendMessage(newMessage.makeMessage());
+                        autoscroll = false;
+                    }
 
-            }else if(mode.equals("Circle3")){
-                p1 = new double[] {x,y};
-                p2 = new double[]{};
-                p3 = new double[]{};
-                touchCounter = 1;
+                    break;
+                case "Circle3":
+                    p1 = new double[]{x, y};
+                    p2 = new double[]{};
+                    p3 = new double[]{};
+                    touchPointCounter = 1;
 
-            }else if(mode.equals("Rubbing")){
-                rubbingDirection = 0;
-                frequencies = new ArrayList<>(Arrays.asList(0.0, 0.0));
-                T1 = System.currentTimeMillis();
-                firstStroke = true;
+                    break;
+                case "Rubbing":
+                    rubbingDirection = 0;
+                    frequencies = new ArrayList<>(Arrays.asList(0.0, 0.0));
+                    T1 = System.currentTimeMillis();
+                    firstStroke = true;
+                    turnPointY = y;
 
-            }else if(mode.equals("Drag")||mode.equals("Thumb")){
-                touchCounter = 1;
+                    break;
+                case "Drag":
+                case "Thumb":
+                    touchPointCounter = 1;
+                    break;
             }
 
         }else if(actionType == MotionEvent.ACTION_MOVE){
@@ -333,146 +343,156 @@ public class MooseActivity extends AppCompatActivity {
             }
 
 
-            if (mode.equals("Scroll")) {
+            switch (mode) {
+                case "Scroll": {
 
-                //** calculations
-                double deltaY = newYposition - lastYposition;
-                lastYposition = newYposition;
-
-                //** send information
-                Message newMessage = new Message("client", "Scroll", "deltaY");
-                newMessage.setValue(String.valueOf(deltaY));
-                communicator.sendMessage(newMessage.makeMessage());
-
-            }else if(mode.equals("Drag")) {
-                if (touchCounter % 5 == 0) {
                     //** calculations
                     double deltaY = newYposition - lastYposition;
                     lastYposition = newYposition;
 
-                    double dragDelta = deltaY * -1;
-
                     //** send information
-                    Message newMessage = new Message("client", "Drag", "deltaY");
-                    newMessage.setValue(String.valueOf(dragDelta));
+                    Message newMessage = new Message("client", "Scroll", "deltaY");
+                    newMessage.setValue(String.valueOf(deltaY));
                     communicator.sendMessage(newMessage.makeMessage());
-                }
-                touchCounter++;
 
-            } else if(mode.equals("Thumb")){
-                if(touchCounter % 2 == 0) {
+                    break;
+                }
+                case "Drag":
+                    if (touchPointCounter % ithPoint == 0) {
+                        //** calculations
+                        double deltaY = newYposition - lastYposition;
+                        lastYposition = newYposition;
+
+                        double dragDelta = deltaY * -1;
+
+                        //** send information
+                        Message newMessage = new Message("client", "Drag", "deltaY");
+                        newMessage.setValue(String.valueOf(dragDelta));
+                        communicator.sendMessage(newMessage.makeMessage());
+                    }
+                    touchPointCounter++;
+
+                    break;
+                case "Thumb":
+                    if (touchPointCounter % ithPoint == 0) {
+                        //** calculations
+                        double deltaY = newYposition - lastYposition;
+                        lastYposition = newYposition;
+
+
+                        //** send information
+                        Message newMessage = new Message("client", "Thumb", "deltaY");
+                        newMessage.setValue(String.valueOf(deltaY));
+                        communicator.sendMessage(newMessage.makeMessage());
+                    }
+                    touchPointCounter++;
+
+                    break;
+                case "Flick": {
+
                     //** calculations
                     double deltaY = newYposition - lastYposition;
                     lastYposition = newYposition;
-
+                    totalDistance += deltaY;
 
                     //** send information
-                    Message newMessage = new Message("client", "Thumb", "deltaY");
+                    Message newMessage = new Message("client", "Flick", "deltaY");
                     newMessage.setValue(String.valueOf(deltaY));
                     communicator.sendMessage(newMessage.makeMessage());
+
+                    break;
                 }
-                touchCounter++;
+                case "TrackPoint": {
+                    float deltaY = (float) (newYposition - lastYposition); //lastPosition is not changing ! so equal start pos.
+                    double gainFactor = 1.3;
+                    double deltaMove = Math.pow(Math.abs(deltaY), gainFactor) / 1000; //to get per sec ?!
+                    int direction = (int) (deltaY/Math.abs(deltaY));
 
-            } else if (mode.equals("Flick")) {
-
-                //** calculations
-                double deltaY = newYposition - lastYposition;
-                lastYposition = newYposition;
-                totalDistance += deltaY;
-
-                //** send information
-                Message newMessage = new Message("client", "Flick", "deltaY");
-                newMessage.setValue(String.valueOf(deltaY));
-                communicator.sendMessage(newMessage.makeMessage());
-
-            } else if(mode.equals("TrackPoint")){
-                float deltaY = (float) (newYposition - lastYposition);
-
-                //** send information
-                Message newMessage = new Message("client", "TrackPoint", "deltaY");
-                newMessage.setValue(String.valueOf(deltaY));
-                communicator.sendMessage(newMessage.makeMessage());
-
-
-            }else if(mode.equals("Circle3")){
-                touchCounter++; //skip some points to make it smoother
-                if(touchCounter % 5 == 0) {
-                    if (p2.length == 0) {
-                        p2 = new double[]{x, y};
-
-                    } else if (p3.length == 0) {
-                        p3 = new double[]{x, y};
-                        calculateAndSendAngle_2();
-                    } else {
-                        p1 = p2;
-                        p2 = p3;
-                        p3 = new double[]{x, y};
-                        calculateAndSendAngle_2();
-                    }
-                }
-
-            }else if(mode.equals("Rubbing")){
-                double deltaY = newYposition - lastYposition;
-
-                if(deltaY > 0) {
-                    if(rubbingDirection == 0){
-                        rubbingDirection = 1;
-                        initialDirection = rubbingDirection;
-
-                    }else if(rubbingDirection < 0){
-                        System.out.println("Direction changed");
-                        if(!firstStroke){
-                            /*if(! sendNewStroke(turnPointY, lastYposition)){
-                                //if to slow reset to first stroke ?!
-                                firstStroke = true;
-                            }*/
-                            sendNewStroke(turnPointY, lastYposition);
-                        }else{
-                            firstStroke = false;
-                            //since first Stroke is normal drag no info needs to be send
-                            T1 = System.currentTimeMillis();
-                        }
-
-                        turnPointY = lastYposition;
-                        rubbingDirection = 1;
-                    }
-
-                }else if (deltaY < 0){
-                    if(rubbingDirection == 0){
-                        rubbingDirection = -1;
-                        initialDirection = rubbingDirection;
-
-                    }else if(rubbingDirection > 0){
-                        System.out.println("Direction changed");
-
-                        if(!firstStroke){
-                            sendNewStroke(turnPointY, lastYposition);
-                        }else{
-                            firstStroke = false;
-                            //since first Stroke is normal drag no info needs to be send
-                            T1 = System.currentTimeMillis();
-                        }
-
-                        turnPointY = lastYposition;
-                        rubbingDirection = -1;
-                    }
-                }
-
-                if(firstStroke){
-                    //standard drag with gain 1;
                     //** send information
-                    Message newMessage = new Message("client", "Rubbing", "deltaY");
-                    newMessage.setValue(String.valueOf(deltaY));
+                    Message newMessage = new Message("client", "TrackPoint", "deltaY");
+                    newMessage.setValue(String.valueOf(deltaMove*direction));
                     communicator.sendMessage(newMessage.makeMessage());
+
+                    break;
                 }
+                case "Circle3":
+                    touchPointCounter++; //skip some points to make it smoother
 
-                //for all:
-                lastYposition =  newYposition;
+                    if (touchPointCounter % ithPoint == 0) {
+                        if (p2.length == 0) {
+                            p2 = new double[]{x, y};
 
+                        } else if (p3.length == 0) {
+                            p3 = new double[]{x, y};
+                            calculateAndSendAngle_2();
+                        } else {
+                            p1 = p2;
+                            p2 = p3;
+                            p3 = new double[]{x, y};
+                            calculateAndSendAngle_2();
+                        }
+                    }
 
-            }else if(mode.equals("TwoFinger")){
-                if(rightFingerMoving){System.out.print("Two Finger moving!"); }
-                System.out.println("-- Left: " + y +  " Right:" + rightFingerPositionY);
+                    break;
+                case "Rubbing": {
+                    double deltaY = newYposition - lastYposition;
+                    long deltaTime = System.currentTimeMillis() - timeLastMoved;
+
+                    //"it is turned off when the finger stops moving for a 300ms delay" [Malacria2010]
+                    if(deltaTime < 300 ){
+                        int currentDirection = (int) (deltaY / Math.abs(deltaY));
+
+                        //if direction changed -> one stroke may have ended
+                        if(currentDirection != rubbingDirection){
+                            double strokeTime_sec = (double) (System.currentTimeMillis() - T1) / 1000;  // in sec
+                            double amplitude = Math.abs(turnPointY - lastYposition);
+
+                            if(firstStroke){
+                                // "is activated only if the mean speed of the first stroke exceeds 50 pixels/sec" [Malacria2010]
+                                if(amplitude/strokeTime_sec >  50) {
+                                    //activate rubbing
+                                    firstStroke = false;
+                                    T1 = System.currentTimeMillis();
+                                }
+
+                            }else{
+                                sendNewStroke(amplitude, strokeTime_sec);
+                            }
+
+                            turnPointY = lastYposition;
+                            rubbingDirection = currentDirection;
+                        }
+
+                    }else{
+                        //RESTART here
+                        firstStroke = true; //set back to dragging
+                        T1 = System.currentTimeMillis();
+                        turnPointY = newYposition;
+                    }
+
+                    // DRAGGING
+                    if (firstStroke) {
+                        rubbingDirection = (int) (deltaY / Math.abs(deltaY)); // should be 1 // -1
+                        initialDirection = rubbingDirection;
+
+                        //** send information
+                        Message newMessage = new Message("client", "Rubbing", "deltaY");
+                        newMessage.setValue(String.valueOf(deltaY));
+                        communicator.sendMessage(newMessage.makeMessage());
+                    }
+
+                    //for all:
+                    lastYposition = newYposition;
+                    timeLastMoved = System.currentTimeMillis();
+
+                    break;
+                }
+                case "TwoFinger":
+                    if (rightFingerMoving) {
+                        System.out.print("Two Finger moving!");
+                    }
+                    System.out.println("-- Left: " + y + " Right:" + rightFingerPositionY);
+                    break;
             }
 
         }else if(actionType == MotionEvent.ACTION_UP){
@@ -510,39 +530,22 @@ public class MooseActivity extends AppCompatActivity {
 
     }
 
-    public Boolean sendNewStroke(double last_TurnPoint, double lastY_beforeTurn){
-        long deltaTime = System.currentTimeMillis() - T1;
-        double deltaT_sec = (double) deltaTime/1000;
-        System.out.println("Delta T = " + deltaTime + "ms ");
-        System.out.println("Delta T = " + (double) deltaTime/1000 + "s ");
-        T1 = System.currentTimeMillis();
 
-        double amplitude = Math.abs(lastY_beforeTurn - last_TurnPoint);
-        System.out.println("Amplitude = " + amplitude);
 
-        //if speed exceeds 50 px / sec
-        if(amplitude/deltaT_sec >  50) {
-            double currentFrequency = 1 / (2 * deltaT_sec);
-            double sumFrequencies = frequencies.get(0) + frequencies.get(1) + currentFrequency;
-            double gain = Math.max(1, k * ((float) 1 / 3) * sumFrequencies);
-            System.out.println("Gain = " + gain);
-            double distance = gain * amplitude * initialDirection;
+    public void sendNewStroke(double amplitude, double deltaT_sec){
+        double currentFrequency = 1 / (2 * deltaT_sec);
+        double sumFrequencies = frequencies.get(0) + frequencies.get(1) + currentFrequency;
+        double gain = Math.max(1, k * ((float) 1 / 3) * sumFrequencies);
+        System.out.println("Gain = " + gain);
+        double distance = gain * amplitude * initialDirection;
 
-            //** send information
-            Message newMessage = new Message("client", "Rubbing", "deltaY");
-            newMessage.setValue(String.valueOf(distance));
-            communicator.sendMessage(newMessage.makeMessage());
+        //** send information
+        Message newMessage = new Message("client", "Rubbing", "deltaY");
+        newMessage.setValue(String.valueOf(distance));
+        communicator.sendMessage(newMessage.makeMessage());
 
-            frequencies.set(1, frequencies.get(0));
-            frequencies.set(0, currentFrequency);
-
-            return true;
-
-        }else{
-            System.out.println(" TOO SLOW ! ");
-            return false;
-        }
-
+        frequencies.set(1, frequencies.get(0));
+        frequencies.set(0, currentFrequency);
     }
 
     public void scrollWheel_Action (float y, int actionType){
