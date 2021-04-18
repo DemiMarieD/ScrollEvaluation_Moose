@@ -7,7 +7,6 @@ import android.content.Context;
 import android.graphics.Color;
 import android.os.Bundle;
 import android.os.Vibrator;
-import android.provider.Settings;
 import android.util.TypedValue;
 import android.view.MotionEvent;
 import android.view.View;
@@ -35,6 +34,8 @@ public class MooseActivity extends AppCompatActivity {
     private TextView tvInfo;
     private TextView gainLable;
     private SeekBar seekbar_gain;
+    private TextView sensitivityLable;
+    private SeekBar seekbar_sens;
 
     private String mode = "";
 
@@ -117,16 +118,38 @@ public class MooseActivity extends AppCompatActivity {
         communicator.setActivity(this);
 
         //SETTINGS INPUTS
-        seekbar_gain = findViewById(R.id.seekBar_gain);
         gainLable = findViewById(R.id.gainLable);
-        seekbar_gain.setVisibility(View.INVISIBLE);
         gainLable.setVisibility(View.INVISIBLE);
-
+        seekbar_gain = findViewById(R.id.seekBar_gain);
+        seekbar_gain.setVisibility(View.INVISIBLE);
         seekbar_gain.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
             @Override
             public void onProgressChanged(SeekBar seekBar, int i, boolean b) {
                 gainLable.setText("Gain: " + (double) i/100);
                 gainFactor = (double) i/100;
+            }
+
+            @Override
+            public void onStartTrackingTouch(SeekBar seekBar) {
+
+            }
+
+            @Override
+            public void onStopTrackingTouch(SeekBar seekBar) {
+
+            }
+        });
+
+
+        sensitivityLable = findViewById(R.id.smoothLable);
+        sensitivityLable.setVisibility(View.INVISIBLE);
+        seekbar_sens = findViewById(R.id.seekBar_smooth);
+        seekbar_sens.setVisibility(View.INVISIBLE);
+        seekbar_sens.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+            @Override
+            public void onProgressChanged(SeekBar seekBar, int i, boolean b) {
+                sensitivityLable.setText("Insensitivity: " +  i);
+                ithPoint =  i;
             }
 
             @Override
@@ -711,8 +734,14 @@ public class MooseActivity extends AppCompatActivity {
         switch (mode) {
             case "Drag": {
                 ithPoint = 5;
-                gainFactor = 1; //linear
+                seekbar_sens.setProgress(5);
+                seekbar_sens.setMax(20);
+                sensitivityLable.setText("Insensitivity: " + ithPoint);
+                seekbar_sens.setVisibility(View.VISIBLE);
+                sensitivityLable.setVisibility(View.VISIBLE);
 
+                //GAIN
+                gainFactor = 1; //linear
                 seekbar_gain.setProgress(100);
                 seekbar_gain.setMax(1000);
                 //seekbar_gain.setMin(1);
@@ -724,8 +753,14 @@ public class MooseActivity extends AppCompatActivity {
             }
             case "DragAcceleration": {
                 ithPoint = 5;
-                gainFactor = 0.3; //is used in conjunction with speed -> the higher the slower
+                seekbar_sens.setProgress(5);
+                seekbar_sens.setMax(20);
+                sensitivityLable.setText("Insensitivity: " + ithPoint);
+                seekbar_sens.setVisibility(View.VISIBLE);
+                sensitivityLable.setVisibility(View.VISIBLE);
 
+                //GAIN
+                gainFactor = 0.3; //is used in conjunction with speed -> the higher the slower
                 seekbar_gain.setProgress(30);
                 seekbar_gain.setMax(200);
                 //seekbar_gain.setMin(1);
@@ -737,11 +772,23 @@ public class MooseActivity extends AppCompatActivity {
             }
             case "Thumb":{
                 ithPoint = 5;
+                seekbar_sens.setProgress(5);
+                seekbar_sens.setMax(20);
+                sensitivityLable.setText("Insensitivity: " + ithPoint);
+                seekbar_sens.setVisibility(View.VISIBLE);
+                sensitivityLable.setVisibility(View.VISIBLE);
 
                 break;
             }
             case "TrackPoint": {
                 ithPoint = 1;
+                seekbar_sens.setProgress(1);
+                seekbar_sens.setMax(20);
+                sensitivityLable.setText("Insensitivity: " + ithPoint);
+                seekbar_sens.setVisibility(View.VISIBLE);
+                sensitivityLable.setVisibility(View.VISIBLE);
+
+                //GAIN
                 gainFactor = 1.5; //exponential  [ 1.3 used in multi-scroll by cockburn ]
                 //todo dont see that much effect ..
                 seekbar_gain.setProgress(150);
@@ -755,8 +802,14 @@ public class MooseActivity extends AppCompatActivity {
             }
             case "Circle3": {
                 ithPoint = 5;
-                gainFactor = 100; //multiplied with angle, the higher the faster; R = 220px
+                seekbar_sens.setProgress(5);
+                seekbar_sens.setMax(20);
+                sensitivityLable.setText("Insensitivity: " + ithPoint);
+                seekbar_sens.setVisibility(View.VISIBLE);
+                sensitivityLable.setVisibility(View.VISIBLE);
 
+                //GAIN
+                gainFactor = 100; //multiplied with angle, the higher the faster; R = 220px
                 seekbar_gain.setProgress(10000);
                 seekbar_gain.setMax(20000);
                 //seekbar_gain.setMin(1);
