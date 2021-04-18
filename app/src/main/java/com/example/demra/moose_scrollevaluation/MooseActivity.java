@@ -208,9 +208,12 @@ public class MooseActivity extends AppCompatActivity {
 
                         }
 
-                    }else{
-                        //todo stop for rate-based / trackpoint
+                    }else if(mode.equals("TrackPoint")){
+                        // stop for rate-based / trackpoint
+                        Message newMessage = new Message("client", "TrackPoint", "stop");
+                        communicator.sendMessage(newMessage.makeMessage());
                     }
+                    
                     break; //break for because we found the moving pointer!
                 }
             }
@@ -247,8 +250,10 @@ public class MooseActivity extends AppCompatActivity {
 
                 }
 
-            }else{
-                //todo stop for rate-based / trackpoint
+            }else if(mode.equals("TrackPoint")){
+                // stop for rate-based / trackpoint
+                Message newMessage = new Message("client", "TrackPoint", "stop");
+                communicator.sendMessage(newMessage.makeMessage());
             }
 
         }
@@ -487,12 +492,6 @@ public class MooseActivity extends AppCompatActivity {
 
                     break;
                 }
-                case "TwoFinger":
-                    if (rightFingerMoving) {
-                        System.out.print("Two Finger moving!");
-                    }
-                    System.out.println("-- Left: " + y + " Right:" + rightFingerPositionY);
-                    break;
             }
 
         }else if(actionType == MotionEvent.ACTION_UP){
