@@ -125,9 +125,8 @@ public class MooseActivity extends AppCompatActivity {
         seekbar_gain.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
             @Override
             public void onProgressChanged(SeekBar seekBar, int i, boolean b) {
-                gainLable.setText("Gain: " + i);
-                System.out.println("Gain: " + seekbar_gain.getProgress());
-                gainFactor = seekbar_gain.getProgress();
+                gainLable.setText("Gain: " + (double) i/100);
+                gainFactor = (double) i/100;
             }
 
             @Override
@@ -713,8 +712,9 @@ public class MooseActivity extends AppCompatActivity {
             case "Drag": {
                 ithPoint = 5;
                 gainFactor = 1; //linear
-                seekbar_gain.setProgress(1);
-                seekbar_gain.setMax(10);
+
+                seekbar_gain.setProgress(100);
+                seekbar_gain.setMax(1000);
                 //seekbar_gain.setMin(1);
                 gainLable.setText("Gain: " + gainFactor);
                 seekbar_gain.setVisibility(View.VISIBLE);
@@ -724,7 +724,15 @@ public class MooseActivity extends AppCompatActivity {
             }
             case "DragAcceleration": {
                 ithPoint = 5;
-                gainFactor = 0.3; //is used in conjunction with speed
+                gainFactor = 0.3; //is used in conjunction with speed -> the higher the slower
+
+                seekbar_gain.setProgress(30);
+                seekbar_gain.setMax(200);
+                //seekbar_gain.setMin(1);
+                gainLable.setText("Gain: " + gainFactor);
+                seekbar_gain.setVisibility(View.VISIBLE);
+                gainLable.setVisibility(View.VISIBLE);
+
                 break;
             }
             case "Thumb":{
@@ -735,12 +743,27 @@ public class MooseActivity extends AppCompatActivity {
             case "TrackPoint": {
                 ithPoint = 1;
                 gainFactor = 1.5; //exponential  [ 1.3 used in multi-scroll by cockburn ]
+                //todo dont see that much effect ..
+                seekbar_gain.setProgress(150);
+                seekbar_gain.setMax(500);
+                //seekbar_gain.setMin(1);
+                gainLable.setText("Gain: " + gainFactor);
+                seekbar_gain.setVisibility(View.VISIBLE);
+                gainLable.setVisibility(View.VISIBLE);
 
                 break;
             }
             case "Circle3": {
                 ithPoint = 5;
-                gainFactor = 100; //multiplied with angle, the higher the faster; R = 220px [2014]
+                gainFactor = 100; //multiplied with angle, the higher the faster; R = 220px
+
+                seekbar_gain.setProgress(10000);
+                seekbar_gain.setMax(20000);
+                //seekbar_gain.setMin(1);
+                gainLable.setText("Gain: " + gainFactor);
+                seekbar_gain.setVisibility(View.VISIBLE);
+                gainLable.setVisibility(View.VISIBLE);
+
                 break;
             }
             case "Rubbing": {
