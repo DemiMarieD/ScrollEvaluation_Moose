@@ -368,6 +368,17 @@ public class MooseActivity extends AppCompatActivity {
                     }
 
                     break;
+                case "MultiFlick": {
+                    downTime = System.currentTimeMillis();
+                    timeLastMoved = downTime;
+                    totalDistance = 0;
+                    //todo timer when not moved in 300ms then stop (if autoscroll) ?!
+                    break;
+                }
+                case "DecelFlick": {
+
+                    break;
+                }
                 case "Circle3":
                     p1 = new double[]{x, y};
                     p2 = new double[]{};
@@ -483,6 +494,36 @@ public class MooseActivity extends AppCompatActivity {
 
                     break;
                 }
+                case "MultiFlick": {
+                    //** calculations
+                    double deltaY = newYposition - lastYposition;
+                    lastYposition = newYposition;
+                    totalDistance += deltaY;
+
+                    long deltaTime = System.currentTimeMillis() - timeLastMoved;
+                    timeLastMoved = System.currentTimeMillis();
+                    if( autoscroll && deltaTime > 100 ){
+                        //continue dragging
+                        autoscroll = false;
+                        Message newMessage = new Message("client", "MultiFlick", "stop");
+                        communicator.sendMessage(newMessage.makeMessage());
+                    }
+
+                    if(!autoscroll) {
+                        //** send information
+                        Message newMessage = new Message("client", "MultiFlick", "deltaY");
+                        newMessage.setValue(String.valueOf(deltaY));
+                        communicator.sendMessage(newMessage.makeMessage());
+                    }
+                    //else if auto-scroll the collected changes will be added to the speed in the end
+
+                    break;
+                }
+                case "DecelFlick": {
+
+
+                    break;
+                }
                 case "TrackPoint": {
                    if (touchPointCounter % ithPoint == 0) {
                         float deltaY = (float) (newYposition - lastYposition); //lastPosition is not changing ! so equal start pos.
@@ -582,23 +623,66 @@ public class MooseActivity extends AppCompatActivity {
                 communicator.sendMessage(newMessage.makeMessage());
 
 
-            }else if(mode.equals("TrackPoint")){
-                Message newMessage = new Message("client", "TrackPoint", "stop");
-                communicator.sendMessage(newMessage.makeMessage());
+            }else{
+                switch (mode) {
+                    case "TrackPoint": {
+                        Message newMessage = new Message("client", "TrackPoint", "stop");
+                        communicator.sendMessage(newMessage.makeMessage());
 
+                        break;
+                    }
+                    case "Flick": {
+                        long deltaTime = System.currentTimeMillis() - downTime; //ms
+                        // if faster then 0.5sec
+                        if(deltaTime < 501){
+                            System.out.println("It was a flick!");
+                            totalDistance += y-lastYposition;
+                            double speed = totalDistance/deltaTime; // px/ms
+                            double adjustedSpeed = speed*gainFactor;
+                            autoscroll = true;
+                            //** send information
+                            Message newMessage = new Message("client", "Flick", "speed");
+                            newMessage.setValue(String.valueOf(adjustedSpeed));
+                            communicator.sendMessage(newMessage.makeMessage());
+                        }
 
-            }else if(mode.equals("Flick")){
-                long deltaTime = System.currentTimeMillis() - downTime; //ms
-                // if faster then 0.5sec
-                if(deltaTime < 501){
-                    System.out.println("It was a flick!");
-                    totalDistance += y-lastYposition;
-                    double speed = totalDistance/deltaTime; // px/ms
-                    autoscroll = true;
-                    //** send information
-                    Message newMessage = new Message("client", "Flick", "speed");
-                    newMessage.setValue(String.valueOf(speed));
-                    communicator.sendMessage(newMessage.makeMessage());
+                        break;
+                    }
+                    case "MultiFlick": {
+                        long deltaTime = System.currentTimeMillis() - downTime; //ms
+
+                        // if faster then 0.5sec
+                        if(deltaTime < 501){
+                            System.out.println("It was a flick!");
+                            totalDistance += y-lastYposition;
+                            double speed = totalDistance/deltaTime; // px/ms
+                            double adjustedSpeed = speed*gainFactor;
+                            if(!autoscroll) {
+                                autoscroll = true;
+                                //** send information
+                                Message newMessage = new Message("client", "MultiFlick", "speed");
+                                newMessage.setValue(String.valueOf(adjustedSpeed));
+                                communicator.sendMessage(newMessage.makeMessage());
+
+                            }else{
+                                //** send information
+                                Message newMessage = new Message("client", "MultiFlick", "addSpeed");
+                                newMessage.setValue(String.valueOf(speed));
+                                communicator.sendMessage(newMessage.makeMessage());
+                            }
+
+                        }else if(autoscroll){
+                            autoscroll = false;
+                            Message newMessage = new Message("client", mode, "stop");
+                            communicator.sendMessage(newMessage.makeMessage());
+                        }
+
+                        break;
+                    }
+                    case "DecelFlick": {
+
+                        break;
+                    }
                 }
             }
 
@@ -734,88 +818,44 @@ public class MooseActivity extends AppCompatActivity {
         switch (mode) {
             case "Drag": {
                 ithPoint = 5;
-                seekbar_sens.setProgress(5);
-                seekbar_sens.setMax(20);
-                sensitivityLable.setText("Insensitivity: " + ithPoint);
-                seekbar_sens.setVisibility(View.VISIBLE);
-                sensitivityLable.setVisibility(View.VISIBLE);
+                setBar("sens", ithPoint, 20);
 
-                //GAIN
                 gainFactor = 1; //linear
-                seekbar_gain.setProgress(100);
-                seekbar_gain.setMax(1000);
-                //seekbar_gain.setMin(1);
-                gainLable.setText("Gain: " + gainFactor);
-                seekbar_gain.setVisibility(View.VISIBLE);
-                gainLable.setVisibility(View.VISIBLE);
+                setBar("gain", gainFactor, 10);
 
                 break;
             }
             case "DragAcceleration": {
                 ithPoint = 5;
-                seekbar_sens.setProgress(5);
-                seekbar_sens.setMax(20);
-                sensitivityLable.setText("Insensitivity: " + ithPoint);
-                seekbar_sens.setVisibility(View.VISIBLE);
-                sensitivityLable.setVisibility(View.VISIBLE);
+                setBar("sens", ithPoint, 20);
 
-                //GAIN
                 gainFactor = 0.3; //is used in conjunction with speed -> the higher the slower
-                seekbar_gain.setProgress(30);
-                seekbar_gain.setMax(200);
-                //seekbar_gain.setMin(1);
-                gainLable.setText("Gain: " + gainFactor);
-                seekbar_gain.setVisibility(View.VISIBLE);
-                gainLable.setVisibility(View.VISIBLE);
+                setBar("gain", gainFactor, 2);
 
                 break;
             }
             case "Thumb":{
                 ithPoint = 5;
-                seekbar_sens.setProgress(5);
-                seekbar_sens.setMax(20);
-                sensitivityLable.setText("Insensitivity: " + ithPoint);
-                seekbar_sens.setVisibility(View.VISIBLE);
-                sensitivityLable.setVisibility(View.VISIBLE);
+                setBar("sens", ithPoint, 20);
 
                 break;
             }
             case "TrackPoint": {
                 ithPoint = 1;
-                seekbar_sens.setProgress(1);
-                seekbar_sens.setMax(20);
-                sensitivityLable.setText("Insensitivity: " + ithPoint);
-                seekbar_sens.setVisibility(View.VISIBLE);
-                sensitivityLable.setVisibility(View.VISIBLE);
+                setBar("sens", ithPoint, 20);
 
-                //GAIN
                 gainFactor = 1.5; //exponential  [ 1.3 used in multi-scroll by cockburn ]
                 //todo dont see that much effect ..
-                seekbar_gain.setProgress(150);
-                seekbar_gain.setMax(500);
-                //seekbar_gain.setMin(1);
-                gainLable.setText("Gain: " + gainFactor);
-                seekbar_gain.setVisibility(View.VISIBLE);
-                gainLable.setVisibility(View.VISIBLE);
+                setBar("gain", gainFactor, 5);
 
                 break;
             }
             case "Circle3": {
                 ithPoint = 5;
-                seekbar_sens.setProgress(5);
-                seekbar_sens.setMax(20);
-                sensitivityLable.setText("Insensitivity: " + ithPoint);
-                seekbar_sens.setVisibility(View.VISIBLE);
-                sensitivityLable.setVisibility(View.VISIBLE);
+                setBar("sens", ithPoint, 20);
 
-                //GAIN
                 gainFactor = 100; //multiplied with angle, the higher the faster; R = 220px
-                seekbar_gain.setProgress(10000);
-                seekbar_gain.setMax(20000);
-                //seekbar_gain.setMin(1);
-                gainLable.setText("Gain: " + gainFactor);
-                seekbar_gain.setVisibility(View.VISIBLE);
-                gainLable.setVisibility(View.VISIBLE);
+                setBar("gain", gainFactor, 200);
 
                 break;
             }
@@ -824,12 +864,45 @@ public class MooseActivity extends AppCompatActivity {
                 break;
             }
             case "Flick": {
+                gainFactor = 1.3; //linear
+                setBar("gain", gainFactor, 5);
+
+                break;
+            }
+            case "MultiFlick": {
+                gainFactor = 1.3; //linear
+                setBar("gain", gainFactor, 5);
+
+                break;
+            }
+            case "DecelFlick": {
+                gainFactor = 1.3; //linear
+                setBar("gain", gainFactor, 5);
 
                 break;
             }
         }
 
 
+    }
+
+    public void setBar(String kind, double progress, int max){
+        if(kind.equals("gain")){
+            seekbar_gain.setProgress((int) (progress*100));
+            seekbar_gain.setMax((int) (max*100));
+            seekbar_gain.setVisibility(View.VISIBLE);
+
+            gainLable.setText("Gain: " + gainFactor);
+            gainLable.setVisibility(View.VISIBLE);
+
+        }else if(kind.equals("sens")){
+            seekbar_sens.setProgress((int) progress);
+            seekbar_sens.setMax(max);
+            seekbar_sens.setVisibility(View.VISIBLE);
+
+            sensitivityLable.setText("Insensitivity: " + ithPoint);
+            sensitivityLable.setVisibility(View.VISIBLE);
+        }
     }
 
     @Override
