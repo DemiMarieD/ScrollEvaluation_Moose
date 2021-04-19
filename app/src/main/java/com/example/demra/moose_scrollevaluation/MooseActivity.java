@@ -27,7 +27,7 @@ public class MooseActivity extends AppCompatActivity {
 
     private final int TOUCH_AREA_HEIGHT_MM = 70; //mm = 5cm
     private int touchAreaHeight; //px 600 might be best
-
+    private AppCompatActivity thisActivity;
     private Communicator communicator;
     private ConstraintLayout touchView;
 
@@ -55,13 +55,14 @@ public class MooseActivity extends AppCompatActivity {
     private double[] p2;
     private double[] p3;
     private int touchPointCounter;
-    private int ithPoint;  //used for
+    private int sensitivity;  //used for
     private double gainFactor; // used by rate-based
 
     //For Flicking
     private long downTime;
     private int totalDistance;
     private Boolean autoscroll;
+    private Thread waitThread;
 
     //For Rubbing
     private int rubbingDirection;
@@ -97,7 +98,7 @@ public class MooseActivity extends AppCompatActivity {
 
         setContentView(R.layout.activity_moose);
 
-
+        thisActivity = this;
       //  mainView = findViewById(R.id.mainLayout);
         touchAreaHeight = (int) TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_MM, TOUCH_AREA_HEIGHT_MM, getResources().getDisplayMetrics());
 
@@ -149,7 +150,7 @@ public class MooseActivity extends AppCompatActivity {
             @Override
             public void onProgressChanged(SeekBar seekBar, int i, boolean b) {
                 sensitivityLable.setText("Insensitivity: " +  i);
-                ithPoint =  i;
+                sensitivity =  i;
             }
 
             @Override
@@ -358,6 +359,7 @@ public class MooseActivity extends AppCompatActivity {
             startXposition = x;
 
             switch (mode) {
+
                 case "Flick":
                     downTime = System.currentTimeMillis();
                     totalDistance = 0;
@@ -368,15 +370,16 @@ public class MooseActivity extends AppCompatActivity {
                     }
 
                     break;
+                case "DecelFlick":
                 case "MultiFlick": {
                     downTime = System.currentTimeMillis();
                     timeLastMoved = downTime;
                     totalDistance = 0;
+                    if(autoscroll){
+                       waitThread =  new Thread(new WaitOnMovement_Thread());
+                       waitThread.start();
+                    }
                     //todo timer when not moved in 300ms then stop (if autoscroll) ?!
-                    break;
-                }
-                case "DecelFlick": {
-
                     break;
                 }
                 case "Circle3":
@@ -418,7 +421,7 @@ public class MooseActivity extends AppCompatActivity {
 
             switch (mode) {
                 case "Drag":
-                    if (touchPointCounter % ithPoint == 0) {
+                    if (touchPointCounter % sensitivity == 0) {
                         //** calculations
                         double deltaY = newYposition - lastYposition;
                         lastYposition = newYposition;
@@ -435,7 +438,7 @@ public class MooseActivity extends AppCompatActivity {
                     break;
 
                 case "DragAcceleration":
-                    if (touchPointCounter % ithPoint == 0) {
+                    if (touchPointCounter % sensitivity == 0) {
                         //** calculations
                         double deltaY = newYposition - lastYposition;
                         lastYposition = newYposition;
@@ -466,7 +469,7 @@ public class MooseActivity extends AppCompatActivity {
 
                     break;
                 case "Thumb":
-                    if (touchPointCounter % ithPoint == 0) {
+                    if (touchPointCounter % sensitivity == 0) {
                         //** calculations
                         double deltaY = newYposition - lastYposition;
                         lastYposition = newYposition;
@@ -480,6 +483,7 @@ public class MooseActivity extends AppCompatActivity {
                     touchPointCounter++;
 
                     break;
+
                 case "Flick": {
 
                     //** calculations
@@ -488,12 +492,13 @@ public class MooseActivity extends AppCompatActivity {
                     totalDistance += deltaY;
 
                     //** send information
-                    Message newMessage = new Message("client", "Flick", "deltaY");
+                    Message newMessage = new Message("client", mode, "deltaY");
                     newMessage.setValue(String.valueOf(deltaY));
                     communicator.sendMessage(newMessage.makeMessage());
 
                     break;
                 }
+                case "DecelFlick":
                 case "MultiFlick": {
                     //** calculations
                     double deltaY = newYposition - lastYposition;
@@ -502,16 +507,23 @@ public class MooseActivity extends AppCompatActivity {
 
                     long deltaTime = System.currentTimeMillis() - timeLastMoved;
                     timeLastMoved = System.currentTimeMillis();
-                    if( autoscroll && deltaTime > 100 ){
+                    //if slowed down in between
+                    if( autoscroll && deltaTime > sensitivity){
                         //continue dragging
                         autoscroll = false;
-                        Message newMessage = new Message("client", "MultiFlick", "stop");
+                        Message newMessage = new Message("client", mode, "stop");
                         communicator.sendMessage(newMessage.makeMessage());
+
+                     //if want to add speed
+                    }else if(autoscroll){
+                        if(!waitThread.isInterrupted()){
+                            waitThread.interrupt();
+                        }
                     }
 
                     if(!autoscroll) {
                         //** send information
-                        Message newMessage = new Message("client", "MultiFlick", "deltaY");
+                        Message newMessage = new Message("client", mode, "deltaY");
                         newMessage.setValue(String.valueOf(deltaY));
                         communicator.sendMessage(newMessage.makeMessage());
                     }
@@ -519,13 +531,8 @@ public class MooseActivity extends AppCompatActivity {
 
                     break;
                 }
-                case "DecelFlick": {
-
-
-                    break;
-                }
                 case "TrackPoint": {
-                   if (touchPointCounter % ithPoint == 0) {
+                   if (touchPointCounter % sensitivity == 0) {
                         float deltaY = (float) (newYposition - lastYposition); //lastPosition is not changing ! so equal start pos.
                         double gainFactor = 1.5; // 1.3 used in multi-scroll by cockburn
                         double deltaMove = Math.pow(Math.abs(deltaY), gainFactor) / 1000; //to get per sec ?!
@@ -543,7 +550,7 @@ public class MooseActivity extends AppCompatActivity {
                 case "Circle3": {
                     touchPointCounter++; //skip some points to make it smoother
 
-                    if (touchPointCounter % ithPoint == 0) {
+                    if (touchPointCounter % sensitivity == 0) {
                         if (p2.length == 0) {
                             p2 = new double[]{x, y};
 
@@ -641,13 +648,14 @@ public class MooseActivity extends AppCompatActivity {
                             double adjustedSpeed = speed*gainFactor;
                             autoscroll = true;
                             //** send information
-                            Message newMessage = new Message("client", "Flick", "speed");
+                            Message newMessage = new Message("client", mode, "speed");
                             newMessage.setValue(String.valueOf(adjustedSpeed));
                             communicator.sendMessage(newMessage.makeMessage());
                         }
 
                         break;
                     }
+                    case "DecelFlick":
                     case "MultiFlick": {
                         long deltaTime = System.currentTimeMillis() - downTime; //ms
 
@@ -660,13 +668,13 @@ public class MooseActivity extends AppCompatActivity {
                             if(!autoscroll) {
                                 autoscroll = true;
                                 //** send information
-                                Message newMessage = new Message("client", "MultiFlick", "speed");
+                                Message newMessage = new Message("client", mode, "speed");
                                 newMessage.setValue(String.valueOf(adjustedSpeed));
                                 communicator.sendMessage(newMessage.makeMessage());
 
                             }else{
                                 //** send information
-                                Message newMessage = new Message("client", "MultiFlick", "addSpeed");
+                                Message newMessage = new Message("client", mode, "addSpeed");
                                 newMessage.setValue(String.valueOf(speed));
                                 communicator.sendMessage(newMessage.makeMessage());
                             }
@@ -676,10 +684,6 @@ public class MooseActivity extends AppCompatActivity {
                             Message newMessage = new Message("client", mode, "stop");
                             communicator.sendMessage(newMessage.makeMessage());
                         }
-
-                        break;
-                    }
-                    case "DecelFlick": {
 
                         break;
                     }
@@ -812,13 +816,17 @@ public class MooseActivity extends AppCompatActivity {
     }
 
     private void setParameter(){
+        tvInfo.setText("Mode is: " + mode);
+        scrollWheel.setVisibility(View.INVISIBLE);
         seekbar_gain.setVisibility(View.INVISIBLE);
         gainLable.setVisibility(View.INVISIBLE);
+        seekbar_sens.setVisibility(View.INVISIBLE);
+        sensitivityLable.setVisibility(View.INVISIBLE);
 
         switch (mode) {
             case "Drag": {
-                ithPoint = 5;
-                setBar("sens", ithPoint, 20);
+                sensitivity = 5;
+                setBar("sens", sensitivity, 20);
 
                 gainFactor = 1; //linear
                 setBar("gain", gainFactor, 10);
@@ -826,8 +834,8 @@ public class MooseActivity extends AppCompatActivity {
                 break;
             }
             case "DragAcceleration": {
-                ithPoint = 5;
-                setBar("sens", ithPoint, 20);
+                sensitivity = 5;
+                setBar("sens", sensitivity, 20);
 
                 gainFactor = 0.3; //is used in conjunction with speed -> the higher the slower
                 setBar("gain", gainFactor, 2);
@@ -835,14 +843,14 @@ public class MooseActivity extends AppCompatActivity {
                 break;
             }
             case "Thumb":{
-                ithPoint = 5;
-                setBar("sens", ithPoint, 20);
+                sensitivity = 5;
+                setBar("sens", sensitivity, 20);
 
                 break;
             }
             case "TrackPoint": {
-                ithPoint = 1;
-                setBar("sens", ithPoint, 20);
+                sensitivity = 1;
+                setBar("sens", sensitivity, 20);
 
                 gainFactor = 1.5; //exponential  [ 1.3 used in multi-scroll by cockburn ]
                 //todo dont see that much effect ..
@@ -851,8 +859,8 @@ public class MooseActivity extends AppCompatActivity {
                 break;
             }
             case "Circle3": {
-                ithPoint = 5;
-                setBar("sens", ithPoint, 20);
+                sensitivity = 5;
+                setBar("sens", sensitivity, 20);
 
                 gainFactor = 100; //multiplied with angle, the higher the faster; R = 220px
                 setBar("gain", gainFactor, 200);
@@ -869,16 +877,18 @@ public class MooseActivity extends AppCompatActivity {
 
                 break;
             }
-            case "MultiFlick": {
+            case "MultiFlick":
+            case "DecelFlick": {
+                sensitivity = 100;
+                setBar("sens", sensitivity, 300);
+
                 gainFactor = 1.3; //linear
                 setBar("gain", gainFactor, 5);
 
                 break;
             }
-            case "DecelFlick": {
-                gainFactor = 1.3; //linear
-                setBar("gain", gainFactor, 5);
-
+            case "ScrollWheel": {
+                scrollWheel.setVisibility(View.VISIBLE);
                 break;
             }
         }
@@ -900,7 +910,7 @@ public class MooseActivity extends AppCompatActivity {
             seekbar_sens.setMax(max);
             seekbar_sens.setVisibility(View.VISIBLE);
 
-            sensitivityLable.setText("Insensitivity: " + ithPoint);
+            sensitivityLable.setText("Insensitivity: " + sensitivity);
             sensitivityLable.setVisibility(View.VISIBLE);
         }
     }
@@ -914,14 +924,6 @@ public class MooseActivity extends AppCompatActivity {
             Message m = new Message(status);
             if(m.getActionType().equals("Mode")) {
                 mode = m.getActionName();
-                tvInfo.setText("Mode is: " + mode);
-
-                if(mode.equals("ScrollWheel")){
-                    scrollWheel.setVisibility(View.VISIBLE);
-                }else{
-                    scrollWheel.setVisibility(View.INVISIBLE);
-                }
-
                 setParameter();
 
             }else if(m.getActionType().equals("Back")){
@@ -929,9 +931,34 @@ public class MooseActivity extends AppCompatActivity {
 
             }else if(m.getActionType().equals("Info")){
                //nothing right now. Only needed for other modes
+               if(m.getActionName().equals("StoppedScroll")){
+                   autoscroll = false;
+               }
+
 
             }else {
                 tvInfo.setText(status);
+            }
+        }
+    }
+
+    class WaitOnMovement_Thread implements Runnable {
+        @Override
+        public void run() {
+            try {
+                Thread.sleep(sensitivity);
+                thisActivity.runOnUiThread(new Runnable() {
+                    @Override
+                    public void run() {
+                        Message newMessage = new Message("client", mode, "stop");
+                        communicator.sendMessage(newMessage.makeMessage());
+                        autoscroll = false;
+                    }
+                });
+
+            } catch (InterruptedException e) {
+                //we need this because when a sleep the interrupt from outside throws an exception
+                Thread.currentThread().interrupt();
             }
         }
     }
