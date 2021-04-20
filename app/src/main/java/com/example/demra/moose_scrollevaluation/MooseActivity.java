@@ -64,6 +64,7 @@ public class MooseActivity extends AppCompatActivity {
     private Boolean autoscroll;
     private Thread waitThread;
 
+
     //For Rubbing
     private int rubbingDirection;
     private int initialDirection;
@@ -370,6 +371,8 @@ public class MooseActivity extends AppCompatActivity {
                     }
 
                     break;
+
+                case "IPhoneFlick":
                 case "DecelFlick":
                 case "MultiFlick": {
                     downTime = System.currentTimeMillis();
@@ -379,7 +382,6 @@ public class MooseActivity extends AppCompatActivity {
                        waitThread =  new Thread(new WaitOnMovement_Thread());
                        waitThread.start();
                     }
-                    //todo timer when not moved in 300ms then stop (if autoscroll) ?!
                     break;
                 }
                 case "Circle3":
@@ -484,6 +486,7 @@ public class MooseActivity extends AppCompatActivity {
 
                     break;
 
+
                 case "Flick": {
 
                     //** calculations
@@ -498,6 +501,7 @@ public class MooseActivity extends AppCompatActivity {
 
                     break;
                 }
+                case "IPhoneFlick":
                 case "DecelFlick":
                 case "MultiFlick": {
                     //** calculations
@@ -638,13 +642,14 @@ public class MooseActivity extends AppCompatActivity {
 
                         break;
                     }
+                    //NONE ADDITATIVE FLICK
                     case "Flick": {
                         long deltaTime = System.currentTimeMillis() - downTime; //ms
+                        totalDistance += y-lastYposition;
+                        double speed = (double) totalDistance/deltaTime; // px/ms
                         // if faster then 0.5sec
-                        if(deltaTime < 501){
+                        if(deltaTime < 501 || speed > 1){ //if time passed is less the 0.5 sec or speed was faster then 1px/ms == 1000px/sec
                             System.out.println("It was a flick!");
-                            totalDistance += y-lastYposition;
-                            double speed = totalDistance/deltaTime; // px/ms
                             double adjustedSpeed = speed*gainFactor;
                             autoscroll = true;
                             //** send information
@@ -655,15 +660,39 @@ public class MooseActivity extends AppCompatActivity {
 
                         break;
                     }
+                    case "IPhoneFlick":{
+                        long deltaTime = System.currentTimeMillis() - downTime; //ms
+                        totalDistance += y-lastYposition;
+                        double speed = (double) totalDistance/deltaTime; // px/ms
+                        // if faster then 0.5sec
+                        if(deltaTime < 501 || speed > 1){ //if time passed is less the 0.5 sec or speed was faster then 1px/ms == 1000px/sec
+                            System.out.println("It was a flick!");
+                            double adjustedSpeed = speed*gainFactor;
+                            autoscroll = true;
+                            //** send information
+                            Message newMessage = new Message("client", mode, "speed");
+                            newMessage.setValue(String.valueOf(adjustedSpeed));
+                            communicator.sendMessage(newMessage.makeMessage());
+
+                        }else if(autoscroll){
+                            autoscroll = false;
+                            Message newMessage = new Message("client", mode, "stop");
+                            communicator.sendMessage(newMessage.makeMessage());
+                        }
+
+                        break;
+                    }
+
+                    //ADDITATIVE FLICK
                     case "DecelFlick":
                     case "MultiFlick": {
                         long deltaTime = System.currentTimeMillis() - downTime; //ms
+                        totalDistance += y-lastYposition;
+                        double speed = (double) totalDistance/deltaTime; // px/ms
 
                         // if faster then 0.5sec
-                        if(deltaTime < 501){
+                        if(deltaTime < 501 || speed > 1){ //if time passed is less the 0.5 sec or speed was faster then 1px/ms == 1000px/sec
                             System.out.println("It was a flick!");
-                            totalDistance += y-lastYposition;
-                            double speed = totalDistance/deltaTime; // px/ms
                             double adjustedSpeed = speed*gainFactor;
                             if(!autoscroll) {
                                 autoscroll = true;
@@ -687,6 +716,10 @@ public class MooseActivity extends AppCompatActivity {
 
                         break;
                     }
+
+
+
+
                 }
             }
 
@@ -877,6 +910,7 @@ public class MooseActivity extends AppCompatActivity {
 
                 break;
             }
+            case "IPhoneFlick":
             case "MultiFlick":
             case "DecelFlick": {
                 sensitivity = 100;
