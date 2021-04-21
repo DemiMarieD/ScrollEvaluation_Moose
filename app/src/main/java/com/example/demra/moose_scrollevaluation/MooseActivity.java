@@ -7,6 +7,7 @@ import android.content.Context;
 import android.graphics.Color;
 import android.os.Bundle;
 import android.os.Vibrator;
+import android.util.DisplayMetrics;
 import android.util.TypedValue;
 import android.view.MotionEvent;
 import android.view.View;
@@ -64,6 +65,9 @@ public class MooseActivity extends AppCompatActivity {
     private Boolean autoscroll;
     private Thread waitThread;
 
+    //iOS
+    private int gestureCount;
+    private double[] lastVelocities;
 
     //For Rubbing
     private int rubbingDirection;
@@ -114,6 +118,8 @@ public class MooseActivity extends AppCompatActivity {
         autoscroll = false;
         firstStroke = true;
        // trackPointFixed = false;
+        timeLastMoved = 0;
+        gestureCount = 0;
 
         // ------ Set up communication
         communicator = Communicator.getInstance();
@@ -384,6 +390,23 @@ public class MooseActivity extends AppCompatActivity {
                     }
                     break;
                 }
+
+                case "iOS":
+                    long timeBetweenGestures = System.currentTimeMillis() - timeLastMoved;
+                    if(timeBetweenGestures < 900){
+                        gestureCount++;
+                    }else{
+                        gestureCount = 1;
+                    }
+                    lastVelocities = new double[]{0.0, 0.0, 0.0};
+                    timeLastMoved = System.currentTimeMillis();
+                    if(autoscroll){
+                        waitThread =  new Thread(new WaitOnMovement_Thread());
+                        waitThread.start();
+                    }
+
+                    break;
+
                 case "Circle3":
                     p1 = new double[]{x, y};
                     p2 = new double[]{};
@@ -498,6 +521,33 @@ public class MooseActivity extends AppCompatActivity {
                     Message newMessage = new Message("client", mode, "deltaY");
                     newMessage.setValue(String.valueOf(deltaY));
                     communicator.sendMessage(newMessage.makeMessage());
+
+                    break;
+                }
+                case "iOS": {
+                    if(autoscroll){
+                        if(!waitThread.isInterrupted()){
+                            waitThread.interrupt();
+                        }
+                    }
+
+                    //** calculations
+                    double deltaY = newYposition - lastYposition;
+                    lastYposition = newYposition;
+                    totalDistance += deltaY;
+
+                    //Note that input and output velocity are identical while the finger is in contact
+                    //** send information
+                    Message newMessage = new Message("client", mode, "deltaY");
+                    newMessage.setValue(String.valueOf(deltaY));
+                    communicator.sendMessage(newMessage.makeMessage());
+
+                    long timeBetweenGestures = System.currentTimeMillis() - timeLastMoved;
+                    lastVelocities[2] = lastVelocities[1];
+                    lastVelocities[1] = lastVelocities[0];
+                    lastVelocities[0] = deltaY/timeBetweenGestures;
+                    //System.out.println("Velocities: " + lastVelocities.toString());
+                    timeLastMoved = System.currentTimeMillis();
 
                     break;
                 }
@@ -660,6 +710,60 @@ public class MooseActivity extends AppCompatActivity {
 
                         break;
                     }
+                    case "iOS":
+                        double Vt = ((lastVelocities[0] + lastVelocities[1])/2) - ((lastVelocities[0] - lastVelocities[1])/4);
+                        System.out.println("(1) Vt = " + Vt);
+
+                        //250 points; one point is 1/163 of an inch;
+                        DisplayMetrics metrics = getResources().getDisplayMetrics();
+                        double pxPerInch = metrics.ydpi; //The exact physical pixels per inch of the screen in the Y dimension
+                        double minSpeed_sec = 250 * (double)(pxPerInch/163);
+                        double minSpeed_ms = minSpeed_sec / 1000;
+                        System.out.println(" *Min speed = " + minSpeed_ms);
+                        if(Math.abs(Vt) > minSpeed_ms){
+                            double Vt_minus1 = ((lastVelocities[1] + lastVelocities[2])/2) - ((lastVelocities[1] - lastVelocities[2])/4);
+                            System.out.println(" Vt-1 = " + Vt_minus1);
+                            double speed = (double)(Vt/4) + (double)(3*Vt_minus1)/4;
+                            System.out.println("(2) Speed = " + speed);
+                            System.out.println(" *Gesture count = " + gestureCount);
+                            /* if(gestureCount < 4) {
+                                //** send information
+                                Message newMessage = new Message("client", mode, "speed");
+                                newMessage.setValue(String.valueOf(speed));
+                                communicator.sendMessage(newMessage.makeMessage());
+                            }else { */
+                                //the value is incremented from the fourth contact onward by 1/480  (k − 1); k =  number flicks made in the series
+                                double incrementVal = (double)(gestureCount-1)/480;
+                                System.out.println("(3) Multiplier = " + incrementVal);
+                                // until it reaches the cap. The cap is 1 before the fourth flick, 16 from the tenth onward
+                                // cap(k) = cap(k − 1) + 0.45(k − 1) for the intervening values.
+                                double cap = getCap(gestureCount);
+                                System.out.println("(4) Cap = " + cap);
+
+                                speed = Math.min(cap, incrementVal) + speed; // todo add or multiply ?
+                                System.out.println("(5) Speed = " + speed);
+
+                                //todo is that needed ?
+                                if(gestureCount < 4 ) {
+                                    //** send information
+                                    Message newMessage = new Message("client", mode, "speed");
+                                    newMessage.setValue(String.valueOf(speed));
+                                    communicator.sendMessage(newMessage.makeMessage());
+                                }else {
+                                    //** send information
+                                    Message newMessage = new Message("client", mode, "addSpeed");
+                                    newMessage.setValue(String.valueOf(speed));
+                                    communicator.sendMessage(newMessage.makeMessage());
+                                }
+                           // }
+                            autoscroll = true;
+                            System.out.println(" ---------------------------- ");
+
+                        }else{
+                            autoscroll = false;
+                        }
+
+                        break;
                     case "IPhoneFlick":{
                         long deltaTime = System.currentTimeMillis() - downTime; //ms
                         totalDistance += y-lastYposition;
@@ -728,6 +832,18 @@ public class MooseActivity extends AppCompatActivity {
         }
         return scrolling;
 
+    }
+
+    private double getCap(int gestureCount) {
+        if (gestureCount < 4) {
+            return 1;
+
+        }else if(gestureCount > 9){
+            return 16;
+
+        }else{
+            return getCap(gestureCount-1) + 0.45*(gestureCount-1);
+        }
     }
 
     public void sendNewStroke(double amplitude, double deltaT_sec){
@@ -908,6 +1024,11 @@ public class MooseActivity extends AppCompatActivity {
                 gainFactor = 1.3; //linear
                 setBar("gain", gainFactor, 5);
 
+                break;
+            }
+            case "iOS":{
+                sensitivity = 100;
+                setBar("sens", sensitivity, 300);
                 break;
             }
             case "IPhoneFlick":
