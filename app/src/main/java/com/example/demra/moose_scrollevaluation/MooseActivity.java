@@ -68,6 +68,8 @@ public class MooseActivity extends AppCompatActivity {
     //iOS
     private int gestureCount;
     private double[] lastVelocities;
+    private int contactPoints;
+    private double gain;
 
     //For Rubbing
     private int rubbingDirection;
@@ -397,9 +399,12 @@ public class MooseActivity extends AppCompatActivity {
                         gestureCount++;
                     }else{
                         gestureCount = 1;
+                        gain = 1;
                     }
                     lastVelocities = new double[]{0.0, 0.0, 0.0};
                     timeLastMoved = System.currentTimeMillis();
+                    contactPoints = 1;
+
                     if(autoscroll){
                         waitThread =  new Thread(new WaitOnMovement_Thread());
                         waitThread.start();
@@ -525,30 +530,48 @@ public class MooseActivity extends AppCompatActivity {
                     break;
                 }
                 case "iOS": {
-                    if(autoscroll){
-                        if(!waitThread.isInterrupted()){
-                            waitThread.interrupt();
+                    contactPoints++;
+                    if (contactPoints % 3 == 0) {
+                        if (autoscroll) {
+                            if (!waitThread.isInterrupted()) {
+                                waitThread.interrupt();
+                            }
+                        }
+
+                        //** calculations
+                        double deltaY = newYposition - lastYposition;
+                        lastYposition = newYposition;
+                        totalDistance += deltaY;
+
+                        if (!autoscroll) {
+                            //Note that input and output velocity are identical while the finger is in contact
+                            //** send information
+                            Message newMessage = new Message("client", mode, "deltaY");
+                            newMessage.setValue(String.valueOf(deltaY));
+                            communicator.sendMessage(newMessage.makeMessage());
+                        }
+
+                        long timeBetweenGestures = System.currentTimeMillis() - timeLastMoved;
+                        lastVelocities[2] = lastVelocities[1];
+                        lastVelocities[1] = lastVelocities[0];
+                        lastVelocities[0] = deltaY / timeBetweenGestures;
+                        //System.out.println("Velocities: " + lastVelocities.toString());
+                        timeLastMoved = System.currentTimeMillis();
+
+                        //the value is incremented from the fourth contact onward
+                        if (contactPoints > 3) {
+                            // one point is 1/163 of an inch;
+                            DisplayMetrics metrics = getResources().getDisplayMetrics();
+                            double pxPerInch = metrics.ydpi;
+                            double pxPerPoint = pxPerInch / 163;
+                            //the value is incremented from the fourth contact onward by
+                            // 1/480 (k − 1) for each point of finger movement
+                            double pointsMoved = deltaY / pxPerPoint;
+                            double incrementVal = ((gestureCount - 1) / 480.0) * pointsMoved;
+                            // System.out.println("Incremented " + incrementVal);
+                            gain += incrementVal;
                         }
                     }
-
-                    //** calculations
-                    double deltaY = newYposition - lastYposition;
-                    lastYposition = newYposition;
-                    totalDistance += deltaY;
-
-                    //Note that input and output velocity are identical while the finger is in contact
-                    //** send information
-                    Message newMessage = new Message("client", mode, "deltaY");
-                    newMessage.setValue(String.valueOf(deltaY));
-                    communicator.sendMessage(newMessage.makeMessage());
-
-                    long timeBetweenGestures = System.currentTimeMillis() - timeLastMoved;
-                    lastVelocities[2] = lastVelocities[1];
-                    lastVelocities[1] = lastVelocities[0];
-                    lastVelocities[0] = deltaY/timeBetweenGestures;
-                    //System.out.println("Velocities: " + lastVelocities.toString());
-                    timeLastMoved = System.currentTimeMillis();
-
                     break;
                 }
                 case "IPhoneFlick":
@@ -712,54 +735,40 @@ public class MooseActivity extends AppCompatActivity {
                     }
                     case "iOS":
                         double Vt = ((lastVelocities[0] + lastVelocities[1])/2) - ((lastVelocities[0] - lastVelocities[1])/4);
-                        System.out.println("(1) Vt = " + Vt);
+                        // System.out.println("(1) Vt = " + Vt);
 
                         //250 points; one point is 1/163 of an inch;
                         DisplayMetrics metrics = getResources().getDisplayMetrics();
                         double pxPerInch = metrics.ydpi; //The exact physical pixels per inch of the screen in the Y dimension
                         double minSpeed_sec = 250 * (double)(pxPerInch/163);
                         double minSpeed_ms = minSpeed_sec / 1000;
-                        System.out.println(" *Min speed = " + minSpeed_ms);
+                        // System.out.println(" *Min speed = " + minSpeed_ms);
+
                         if(Math.abs(Vt) > minSpeed_ms){
                             double Vt_minus1 = ((lastVelocities[1] + lastVelocities[2])/2) - ((lastVelocities[1] - lastVelocities[2])/4);
-                            System.out.println(" Vt-1 = " + Vt_minus1);
+                            // System.out.println(" Vt-1 = " + Vt_minus1);
                             double speed = (double)(Vt/4) + (double)(3*Vt_minus1)/4;
-                            System.out.println("(2) Speed = " + speed);
-                            System.out.println(" *Gesture count = " + gestureCount);
-                            /* if(gestureCount < 4) {
-                                //** send information
-                                Message newMessage = new Message("client", mode, "speed");
-                                newMessage.setValue(String.valueOf(speed));
-                                communicator.sendMessage(newMessage.makeMessage());
-                            }else { */
-                                //the value is incremented from the fourth contact onward by 1/480  (k − 1); k =  number flicks made in the series
-                                double incrementVal = (double)(gestureCount-1)/480;
-                                System.out.println("(3) Multiplier = " + incrementVal);
-                                // until it reaches the cap. The cap is 1 before the fourth flick, 16 from the tenth onward
-                                // cap(k) = cap(k − 1) + 0.45(k − 1) for the intervening values.
-                                double cap = getCap(gestureCount);
-                                System.out.println("(4) Cap = " + cap);
+                            // System.out.println("(2) Speed = " + speed);
+                          //  System.out.println(" *Gesture count = " + gestureCount);
+                            System.out.println("(3*) Gain " + gain);
 
-                                speed = Math.min(cap, incrementVal) + speed; // todo add or multiply ?
-                                System.out.println("(5) Speed = " + speed);
+                            // cumulative gain is applied as the finger lifts after the fourth repeated gesture
+                            // until it reaches the cap. The cap is 1 before the fourth flick, 16 from the tenth onward
+                            // cap(k) = cap(k − 1) + 0.45(k − 1) for the intervening values.
+                            double cap = getCap(gestureCount);
+                            System.out.println("(4) CapedGain = " + Math.min(cap, Math.abs(gain)));
 
-                                //todo is that needed ?
-                                if(gestureCount < 4 ) {
-                                    //** send information
-                                    Message newMessage = new Message("client", mode, "speed");
-                                    newMessage.setValue(String.valueOf(speed));
-                                    communicator.sendMessage(newMessage.makeMessage());
-                                }else {
-                                    //** send information
-                                    Message newMessage = new Message("client", mode, "addSpeed");
-                                    newMessage.setValue(String.valueOf(speed));
-                                    communicator.sendMessage(newMessage.makeMessage());
-                                }
-                           // }
+                            speed = Math.min(cap, Math.abs(gain)) * speed;
+                           // System.out.println("(5) Speed = " + speed);
+
+                            //** send information
+                            Message newMessage = new Message("client", mode, "speed");
+                            newMessage.setValue(String.valueOf(speed));
+                            communicator.sendMessage(newMessage.makeMessage());
+
                             autoscroll = true;
-                            System.out.println(" ---------------------------- ");
-
                         }else{
+                            System.out.println("NO FLICK!");
                             autoscroll = false;
                         }
 
