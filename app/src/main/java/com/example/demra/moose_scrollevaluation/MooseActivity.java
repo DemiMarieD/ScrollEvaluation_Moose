@@ -68,7 +68,6 @@ public class MooseActivity extends AppCompatActivity {
     //iOS
     private int gestureCount;
     private double[] lastVelocities;
-    private int contactPoints;
     private double gain;
 
     //For Rubbing
@@ -393,25 +392,45 @@ public class MooseActivity extends AppCompatActivity {
                     break;
                 }
 
-                case "iOS":
+                case "iOS": {
                     long timeBetweenGestures = System.currentTimeMillis() - timeLastMoved;
-                    if(timeBetweenGestures < 900){
+                    if (timeBetweenGestures < 900) {
                         gestureCount++;
-                    }else{
+                    } else {
                         gestureCount = 1;
                         gain = 1;
                     }
                     lastVelocities = new double[]{0.0, 0.0, 0.0};
                     timeLastMoved = System.currentTimeMillis();
-                    contactPoints = 1;
+                    touchPointCounter = 2;
 
-                    if(autoscroll){
-                        waitThread =  new Thread(new WaitOnMovement_Thread());
+                    if (autoscroll) {
+                        waitThread = new Thread(new WaitOnMovement_Thread());
                         waitThread.start();
                     }
 
                     break;
+                }
+                case "iOS2": {
+                    long timeBetweenGestures = System.currentTimeMillis() - timeLastMoved;
+                    if (timeBetweenGestures < 900) {
+                        gestureCount++;
+                    } else {
+                        gestureCount = 1;
+                        gain = 1;
+                    }
+                    lastVelocities = new double[]{0.0, 0.0, 0.0};
+                    timeLastMoved = System.currentTimeMillis();
+                    touchPointCounter = 2;
 
+                    if (autoscroll) {
+                        Message newMessage = new Message("client", mode, "stop");
+                        communicator.sendMessage(newMessage.makeMessage());
+                        autoscroll = false;
+                    }
+
+                    break;
+                }
                 case "Circle3":
                     p1 = new double[]{x, y};
                     p2 = new double[]{};
@@ -530,8 +549,8 @@ public class MooseActivity extends AppCompatActivity {
                     break;
                 }
                 case "iOS": {
-                    contactPoints++;
-                    if (contactPoints % 3 == 0) {
+                    touchPointCounter++;
+                    if (touchPointCounter % 3 == 0) {
                         if (autoscroll) {
                             if (!waitThread.isInterrupted()) {
                                 waitThread.interrupt();
@@ -558,20 +577,30 @@ public class MooseActivity extends AppCompatActivity {
                         //System.out.println("Velocities: " + lastVelocities.toString());
                         timeLastMoved = System.currentTimeMillis();
 
-                        //the value is incremented from the fourth contact onward
-                        if (contactPoints > 3) {
-                            // one point is 1/163 of an inch;
-                            DisplayMetrics metrics = getResources().getDisplayMetrics();
-                            double pxPerInch = metrics.ydpi;
-                            double pxPerPoint = pxPerInch / 163;
-                            //the value is incremented from the fourth contact onward by
-                            // 1/480 (k − 1) for each point of finger movement
-                            double pointsMoved = deltaY / pxPerPoint;
-                            double incrementVal = ((gestureCount - 1) / 480.0) * pointsMoved;
-                            // System.out.println("Incremented " + incrementVal);
-                            gain += incrementVal;
-                        }
                     }
+                    break;
+                }
+                case "iOS2": {
+                    touchPointCounter++;
+
+                    //** calculations
+                    double deltaY = newYposition - lastYposition;
+                    lastYposition = newYposition;
+                    totalDistance += deltaY;
+
+                    //Note that input and output velocity are identical while the finger is in contact
+                    //** send information
+                    Message newMessage = new Message("client", mode, "deltaY");
+                    newMessage.setValue(String.valueOf(deltaY));
+                    communicator.sendMessage(newMessage.makeMessage());
+
+                    long timeBetweenGestures = System.currentTimeMillis() - timeLastMoved;
+                    lastVelocities[2] = lastVelocities[1];
+                    lastVelocities[1] = lastVelocities[0];
+                    lastVelocities[0] = deltaY / timeBetweenGestures;
+                    //System.out.println("Velocities: " + lastVelocities.toString());
+                    timeLastMoved = System.currentTimeMillis();
+
                     break;
                 }
                 case "IPhoneFlick":
@@ -733,6 +762,7 @@ public class MooseActivity extends AppCompatActivity {
 
                         break;
                     }
+                    case "iOS2":
                     case "iOS":
                         double Vt = ((lastVelocities[0] + lastVelocities[1])/2) - ((lastVelocities[0] - lastVelocities[1])/4);
                         // System.out.println("(1) Vt = " + Vt);
@@ -740,33 +770,40 @@ public class MooseActivity extends AppCompatActivity {
                         //250 points; one point is 1/163 of an inch;
                         DisplayMetrics metrics = getResources().getDisplayMetrics();
                         double pxPerInch = metrics.ydpi; //The exact physical pixels per inch of the screen in the Y dimension
-                        double minSpeed_sec = 250 * (double)(pxPerInch/163);
+                        double pxPerPoint = pxPerInch / 163;
+                        double minSpeed_sec = 250 * pxPerPoint;
                         double minSpeed_ms = minSpeed_sec / 1000;
                         // System.out.println(" *Min speed = " + minSpeed_ms);
 
                         if(Math.abs(Vt) > minSpeed_ms){
                             double Vt_minus1 = ((lastVelocities[1] + lastVelocities[2])/2) - ((lastVelocities[1] - lastVelocities[2])/4);
-                            // System.out.println(" Vt-1 = " + Vt_minus1);
-                            double speed = (double)(Vt/4) + (double)(3*Vt_minus1)/4;
-                            // System.out.println("(2) Speed = " + speed);
-                          //  System.out.println(" *Gesture count = " + gestureCount);
-                            System.out.println("(3*) Gain " + gain);
+                            //1/4Vt + 3/4Vt−1, which is used as the flick velocity
+                            double flickVelocity = (Vt/4) + (3*Vt_minus1)/4;
+
+                            //the value is incremented from the fourth contact onward
+                            if(touchPointCounter > 3) {
+                                // by 1/480 (k − 1) for each point of finger movement
+                                double pointsMoved = totalDistance / pxPerPoint;
+                                double incrementVal = ((gestureCount - 1) / 480.0) * pointsMoved;
+                                gain += incrementVal;
+                                System.out.println("(3*) Gain " + gain);
+                            }
 
                             // cumulative gain is applied as the finger lifts after the fourth repeated gesture
                             // until it reaches the cap. The cap is 1 before the fourth flick, 16 from the tenth onward
                             // cap(k) = cap(k − 1) + 0.45(k − 1) for the intervening values.
                             double cap = getCap(gestureCount);
-                            System.out.println("(4) CapedGain = " + Math.min(cap, Math.abs(gain)));
+                           // System.out.println("(4) CapedGain = " + Math.min(cap, Math.abs(gain)));
 
-                            speed = Math.min(cap, Math.abs(gain)) * speed;
+                            double speed = Math.min(cap, Math.abs(gain)) * flickVelocity;
                            // System.out.println("(5) Speed = " + speed);
 
                             //** send information
                             Message newMessage = new Message("client", mode, "speed");
                             newMessage.setValue(String.valueOf(speed));
                             communicator.sendMessage(newMessage.makeMessage());
-
                             autoscroll = true;
+
                         }else{
                             System.out.println("NO FLICK!");
                             autoscroll = false;
@@ -1036,8 +1073,8 @@ public class MooseActivity extends AppCompatActivity {
                 break;
             }
             case "iOS":{
-                sensitivity = 100;
-                setBar("sens", sensitivity, 300);
+                sensitivity = 70;
+                setBar("sens", sensitivity, 200);
                 break;
             }
             case "IPhoneFlick":
