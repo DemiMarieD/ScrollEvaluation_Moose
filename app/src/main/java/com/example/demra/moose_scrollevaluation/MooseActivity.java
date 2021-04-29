@@ -391,7 +391,8 @@ public class MooseActivity extends AppCompatActivity {
                     }
                     break;
                 }
-
+                case "Flick1000":
+                    downTime = System.currentTimeMillis();
                 case "iOS": {
                     long timeBetweenGestures = System.currentTimeMillis() - timeLastMoved;
                     if (timeBetweenGestures < 900) {
@@ -548,19 +549,21 @@ public class MooseActivity extends AppCompatActivity {
 
                     break;
                 }
+                case "Flick1000":
                 case "iOS": {
                     touchPointCounter++;
                     if (touchPointCounter % 3 == 0) {
-                        if (autoscroll) {
-                            if (!waitThread.isInterrupted()) {
-                                waitThread.interrupt();
-                            }
-                        }
-
                         //** calculations
                         double deltaY = newYposition - lastYposition;
                         lastYposition = newYposition;
                         totalDistance += deltaY;
+                        //System.out.println("delta -- " + deltaY + " -- tPC" + touchPointCounter);
+                        //if smaller 10 it might just be a little adaption of the finger
+                        if (autoscroll && deltaY > 10) {
+                            if (!waitThread.isInterrupted()) {
+                                waitThread.interrupt();
+                            }
+                        }
 
                         if (!autoscroll) {
                             //Note that input and output velocity are identical while the finger is in contact
@@ -760,6 +763,35 @@ public class MooseActivity extends AppCompatActivity {
                             communicator.sendMessage(newMessage.makeMessage());
                         }
 
+                        break;
+                    }
+                    case "Flick1000": {
+                        long deltaTime = System.currentTimeMillis() - downTime; //ms
+                        totalDistance += y - lastYposition;
+                        double totalSpeed = (double) totalDistance / deltaTime; // px/ms
+                        System.out.println("Speed " + totalSpeed);
+                        if(deltaTime < 501 || Math.abs(totalSpeed) > 1) { //if time passed is less the 0.5 sec or speed was faster then 1px/ms == 1000px/sec
+                            double avgVelocity = (lastVelocities[0] + lastVelocities[1] + lastVelocities[2]) / 3.0;
+                            System.out.println("Velocity " + avgVelocity);
+                            int gain = 1;
+                            if(gestureCount > 3 && gestureCount < 12) {
+                               gain = gestureCount-2;
+
+                            }else if(gestureCount > 11){
+                                gain = 10;
+                            }
+                            double speed = avgVelocity*gain;
+                            System.out.println("Final speed = "+ speed);
+                            //** send information
+                            Message newMessage = new Message("client", mode, "speed");
+                            newMessage.setValue(String.valueOf(speed));
+                            communicator.sendMessage(newMessage.makeMessage());
+                            autoscroll = true;
+
+                        }else{
+                            System.out.println("NO FLICK!");
+                            autoscroll = false;
+                        }
                         break;
                     }
                     case "iOS2":
@@ -1054,10 +1086,10 @@ public class MooseActivity extends AppCompatActivity {
                 break;
             }
             case "Circle3": {
-                sensitivity = 5;
+                sensitivity = 8;
                 setBar("sens", sensitivity, 20);
 
-                gainFactor = 100; //multiplied with angle, the higher the faster; R = 220px
+                gainFactor = 45; //multiplied with angle, the higher the faster; R = 220px
                 setBar("gain", gainFactor, 200);
 
                 break;
@@ -1154,6 +1186,7 @@ public class MooseActivity extends AppCompatActivity {
                         Message newMessage = new Message("client", mode, "stop");
                         communicator.sendMessage(newMessage.makeMessage());
                         autoscroll = false;
+                        gestureCount = 1;
                     }
                 });
 
