@@ -643,7 +643,7 @@ public class MooseActivity extends AppCompatActivity {
                 case "TrackPoint": {
                    if (touchPointCounter % sensitivity == 0) {
                         float deltaY = (float) (newYposition - lastYposition); //lastPosition is not changing ! so equal start pos.
-                        double gainFactor = 1.5; // 1.3 used in multi-scroll by cockburn
+                        //double gainFactor = 1.5; // 1.3 used in multi-scroll by cockburn
                         double deltaMove = Math.pow(Math.abs(deltaY), gainFactor) / 1000; //to get per sec ?!
                         int direction = (int) (deltaY/Math.abs(deltaY));
 
@@ -1064,7 +1064,7 @@ public class MooseActivity extends AppCompatActivity {
                 sensitivity = 5;
                 setBar("sens", sensitivity, 20);
 
-                gainFactor = 0.3; //is used in conjunction with speed -> the higher the slower
+                gainFactor = 1.3; //is used in conjunction with speed -> the higher the slower
                 setBar("gain", gainFactor, 2);
 
                 break;
@@ -1089,7 +1089,7 @@ public class MooseActivity extends AppCompatActivity {
                 sensitivity = 8;
                 setBar("sens", sensitivity, 20);
 
-                gainFactor = 45; //multiplied with angle, the higher the faster; R = 220px
+                gainFactor = 45.0; //multiplied with angle, the higher the faster; R = 220px
                 setBar("gain", gainFactor, 200);
 
                 break;
@@ -1131,10 +1131,11 @@ public class MooseActivity extends AppCompatActivity {
 
     public void setBar(String kind, double progress, int max){
         if(kind.equals("gain")){
-            seekbar_gain.setProgress((int) (progress*100));
             seekbar_gain.setMax((int) (max*100));
+            seekbar_gain.setProgress((int) (progress*100));
             seekbar_gain.setVisibility(View.VISIBLE);
 
+            gainFactor = progress;
             gainLable.setText("Gain: " + gainFactor);
             gainLable.setVisibility(View.VISIBLE);
 
