@@ -45,6 +45,14 @@ public class MooseActivity extends AppCompatActivity {
     private double lastYposition;
     private double startXposition;
 
+    //data for logging
+    private double minX;
+    private double minY;
+    private double maxX;
+    private double maxY;
+    private double fingerCount;
+
+
     // To find righ finger
     private final int MAX_POINTER = 5; // 5 different touch pointers supported on most devices
     private float[] mLastTouchX = new float[MAX_POINTER];
@@ -84,7 +92,7 @@ public class MooseActivity extends AppCompatActivity {
     private final int SCROLLWHEEL_NOTCH_SIZE_MM = 1;
     int notchSize_px;
     private ImageButton scrollWheel;
-    private Vibrator v;
+    //private Vibrator v;
 
     //TWO FINGER
     private Boolean leftFingerMoving;
@@ -121,6 +129,11 @@ public class MooseActivity extends AppCompatActivity {
        // trackPointFixed = false;
         timeLastMoved = 0;
         gestureCount = 0;
+        minX = 10000;
+        minY = 10000;
+        maxX = 0;
+        maxY = 0;
+        fingerCount = 0;
 
         // ------ Set up communication
         communicator = Communicator.getInstance();
@@ -180,7 +193,7 @@ public class MooseActivity extends AppCompatActivity {
         scrollWheel.setVisibility(View.INVISIBLE);
         notchSize_px = (int) TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_MM, SCROLLWHEEL_NOTCH_SIZE_MM, getResources().getDisplayMetrics());
         //Scroll Effects
-        v = (Vibrator) this.getSystemService(Context.VIBRATOR_SERVICE);
+       // v = (Vibrator) this.getSystemService(Context.VIBRATOR_SERVICE);
         scrollWheel.setOnTouchListener(new View.OnTouchListener() {
             @Override
             public boolean onTouch(View view, MotionEvent motionEvent) {
@@ -201,6 +214,9 @@ public class MooseActivity extends AppCompatActivity {
             float pointerY = event.getY(actionIndex);
             mLastTouchX[actionIndex] = pointerX;
             mLastTouchY[actionIndex] = pointerY;
+
+            updateMinMax(pointerX, pointerY);
+            updatePointerCount(event.getPointerCount());
 
             // System.out.println("ID " + actionIndex + " pressure: " + event.getPressure(actionIndex));
             // System.out.println("Finger DOWN: " + event.getPointerId(actionIndex) + " at pos: " + pointerX + "/" + pointerY);
@@ -231,6 +247,7 @@ public class MooseActivity extends AppCompatActivity {
 
         } else if (event.getAction() == MotionEvent.ACTION_MOVE) {
             int pointerCount = event.getPointerCount();
+            updatePointerCount(pointerCount);
 
             // Get the Pointer ID of the (currently) moving pointer
             for (int i = 0; i < pointerCount && i < MAX_POINTER; i++) {
@@ -242,7 +259,7 @@ public class MooseActivity extends AppCompatActivity {
                     float pointerY = event.getY(i);
                     mLastTouchX[pointerId] = pointerX;
                     mLastTouchY[pointerId] = pointerY;
-
+                    updateMinMax(pointerX, pointerY);
                     // System.out.println("Finger moved: " + pointerId + " at pos: " + pointerX + "/" + pointerY);
                     // System.out.println("ID " + i + " pressure: " + event.getPressure(i));
 
@@ -284,6 +301,8 @@ public class MooseActivity extends AppCompatActivity {
             int actionIndex = event.getActionIndex();
             float pointerX = event.getX(actionIndex);
             float pointerY = event.getY(actionIndex);
+            updateMinMax(pointerX, pointerY);
+            updatePointerCount(event.getPointerCount());
 
             //Check Target View
             if(isPointInsideView(pointerX, pointerY, scrollWheel) && mode.equals("ScrollWheel")){
@@ -320,6 +339,27 @@ public class MooseActivity extends AppCompatActivity {
         }
 
         return true;
+    }
+
+    private void updatePointerCount(int pointerCount) {
+        if(fingerCount < pointerCount){
+            fingerCount = pointerCount;
+        }
+    }
+
+    private void updateMinMax(float pointerX, float pointerY) {
+        if(minX > pointerX){
+            minX = pointerX;
+        }
+        if(maxX < pointerX){
+            maxX = pointerX;
+        }
+        if(minY > pointerY){
+            minY = pointerY;
+        }
+        if(maxY < pointerY){
+            maxY = pointerY;
+        }
     }
 
     public boolean isPointInsideView(float x, float y, View view){
@@ -954,7 +994,7 @@ public class MooseActivity extends AppCompatActivity {
                 if (Math.abs(deltaY) >= notchSize_px) {
                     int deltaNotches = (int) deltaY / notchSize_px;
 
-                    v.vibrate(10);
+                    //v.vibrate(10);
 
                     //** send information
                     Message newMessage = new Message("client", "ScrollWheel", "deltaNotches");
@@ -1167,6 +1207,25 @@ public class MooseActivity extends AppCompatActivity {
                //nothing right now. Only needed for other modes
                if(m.getActionName().equals("StoppedScroll")){
                    autoscroll = false;
+
+               } else if(m.getActionName().equals("RequestData")){
+                   //*** send data
+                   Message newMessage = new Message("client", "Data", "fingerCount");
+                   newMessage.setValue(String.valueOf(fingerCount));
+                   communicator.sendMessage(newMessage.makeMessage());
+
+                   Message newMessage2 = new Message("client", "Data", "minMax");
+                   //make look like: minX/minY,maxX/maxY
+                   String data = minX+"/"+minY+","+maxX+"/"+maxY;
+                   newMessage2.setValue(String.valueOf(data));
+                   communicator.sendMessage(newMessage2.makeMessage());
+
+                   //***  reset vars
+                   minX = 10000;
+                   minY = 10000;
+                   maxX = 0;
+                   maxY = 0;
+                   fingerCount = 0;
                }
 
 
