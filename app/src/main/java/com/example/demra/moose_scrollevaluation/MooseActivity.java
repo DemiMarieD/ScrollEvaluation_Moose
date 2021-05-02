@@ -26,7 +26,7 @@ import java.util.Vector;
 
 public class MooseActivity extends AppCompatActivity {
 
-    private final int TOUCH_AREA_HEIGHT_MM = 70; //mm = 5cm
+    private final int TOUCH_AREA_HEIGHT_MM = 70; //mm = 7cm
     private int touchAreaHeight; //px 600 might be best
     private AppCompatActivity thisActivity;
     private Communicator communicator;
@@ -43,7 +43,7 @@ public class MooseActivity extends AppCompatActivity {
     private Boolean scrolling; //to distinguish click from scroll events
 
     private double lastYposition;
-    private double startXposition;
+  //  private double startXposition;
 
     //data for logging
     private double minX;
@@ -53,7 +53,7 @@ public class MooseActivity extends AppCompatActivity {
     private double fingerCount;
 
 
-    // To find righ finger
+    // To find right finger pointer (aka left finger)
     private final int MAX_POINTER = 5; // 5 different touch pointers supported on most devices
     private float[] mLastTouchX = new float[MAX_POINTER];
     private float[] mLastTouchY = new float[MAX_POINTER];
@@ -92,15 +92,7 @@ public class MooseActivity extends AppCompatActivity {
     private final int SCROLLWHEEL_NOTCH_SIZE_MM = 1;
     int notchSize_px;
     private ImageButton scrollWheel;
-    //private Vibrator v;
 
-    //TWO FINGER
-    private Boolean leftFingerMoving;
-    private Boolean rightFingerMoving = false;
-    private float rightFingerPositionY = 0;
-    private int leftFinger = 0;
-    private int rightFinger = 0;
-    private int[] deltaMove = new int[]{0, 0}; //0 = left 1= right
 
 
     @Override
@@ -404,24 +396,11 @@ public class MooseActivity extends AppCompatActivity {
             // System.out.println("Finger down: " + motionEvent.getActionIndex());
             scrolling = false;
             lastYposition = y;
-            startXposition = x;
+            //startXposition = x;
 
             switch (mode) {
 
-                case "Flick":
-                    downTime = System.currentTimeMillis();
-                    totalDistance = 0;
-                    if (autoscroll) {
-                        Message newMessage = new Message("client", mode, "stop");
-                        communicator.sendMessage(newMessage.makeMessage());
-                        autoscroll = false;
-                    }
-
-                    break;
-
-                case "IPhoneFlick":
-                case "DecelFlick":
-                case "MultiFlick": {
+                case "DecelFlick": {
                     downTime = System.currentTimeMillis();
                     timeLastMoved = downTime;
                     totalDistance = 0;
@@ -431,8 +410,6 @@ public class MooseActivity extends AppCompatActivity {
                     }
                     break;
                 }
-                case "Flick1000":
-                    downTime = System.currentTimeMillis();
                 case "iOS": {
                     long timeBetweenGestures = System.currentTimeMillis() - timeLastMoved;
                     if (timeBetweenGestures < 900) {
@@ -448,26 +425,6 @@ public class MooseActivity extends AppCompatActivity {
                     if (autoscroll) {
                         waitThread = new Thread(new WaitOnMovement_Thread());
                         waitThread.start();
-                    }
-
-                    break;
-                }
-                case "iOS2": {
-                    long timeBetweenGestures = System.currentTimeMillis() - timeLastMoved;
-                    if (timeBetweenGestures < 900) {
-                        gestureCount++;
-                    } else {
-                        gestureCount = 1;
-                        gain = 1;
-                    }
-                    lastVelocities = new double[]{0.0, 0.0, 0.0};
-                    timeLastMoved = System.currentTimeMillis();
-                    touchPointCounter = 2;
-
-                    if (autoscroll) {
-                        Message newMessage = new Message("client", mode, "stop");
-                        communicator.sendMessage(newMessage.makeMessage());
-                        autoscroll = false;
                     }
 
                     break;
@@ -488,18 +445,12 @@ public class MooseActivity extends AppCompatActivity {
 
                     break;
 
-                case "DragAcceleration":
-                    touchPointCounter = 1;
-                    T1 = System.currentTimeMillis();
-
-                case "Thumb":
                 case "Drag":
                     touchPointCounter = 1;
                     break;
             }
 
         }else if(actionType == MotionEvent.ACTION_MOVE){
-            leftFingerMoving = true;
             scrolling = true;
             double newYposition = y;
             double maxY = touchView.getY() + touchView.getHeight();
@@ -527,69 +478,6 @@ public class MooseActivity extends AppCompatActivity {
 
                     break;
 
-                case "DragAcceleration":
-                    if (touchPointCounter % sensitivity == 0) {
-                        //** calculations
-                        double deltaY = newYposition - lastYposition;
-                        lastYposition = newYposition;
-
-                        double speed = deltaY / (System.currentTimeMillis() - T1);
-                        System.out.println("speed " + speed);
-
-                        /*
-                        double deltaT_sec = (double) ((System.currentTimeMillis() - T1)/1000);
-                        double frequency =  (double) 1 / (2 * deltaT_sec); //like in rubbing used by [Mal..2012]
-                        System.out.println("frequency " + frequency);
-                        double gain = k*frequency;
-                        System.out.println("gain " + gain);
-                        */
-
-                        double gain = Math.abs(speed / gainFactor) ;
-                        System.out.println("gain " + gain);
-
-                        double dragDelta = deltaY * gain * -1;
-
-                        //** send information
-                        Message newMessage = new Message("client", "DragAcceleration", "deltaY");
-                        newMessage.setValue(String.valueOf(dragDelta));
-                        communicator.sendMessage(newMessage.makeMessage());
-                    }
-                    touchPointCounter++;
-                    T1 = System.currentTimeMillis();
-
-                    break;
-                case "Thumb":
-                    if (touchPointCounter % sensitivity == 0) {
-                        //** calculations
-                        double deltaY = newYposition - lastYposition;
-                        lastYposition = newYposition;
-
-
-                        //** send information
-                        Message newMessage = new Message("client", "Thumb", "deltaY");
-                        newMessage.setValue(String.valueOf(deltaY));
-                        communicator.sendMessage(newMessage.makeMessage());
-                    }
-                    touchPointCounter++;
-
-                    break;
-
-
-                case "Flick": {
-
-                    //** calculations
-                    double deltaY = newYposition - lastYposition;
-                    lastYposition = newYposition;
-                    totalDistance += deltaY;
-
-                    //** send information
-                    Message newMessage = new Message("client", mode, "deltaY");
-                    newMessage.setValue(String.valueOf(deltaY));
-                    communicator.sendMessage(newMessage.makeMessage());
-
-                    break;
-                }
-                case "Flick1000":
                 case "iOS": {
                     touchPointCounter++;
                     if (touchPointCounter % 3 == 0) {
@@ -623,32 +511,7 @@ public class MooseActivity extends AppCompatActivity {
                     }
                     break;
                 }
-                case "iOS2": {
-                    touchPointCounter++;
-
-                    //** calculations
-                    double deltaY = newYposition - lastYposition;
-                    lastYposition = newYposition;
-                    totalDistance += deltaY;
-
-                    //Note that input and output velocity are identical while the finger is in contact
-                    //** send information
-                    Message newMessage = new Message("client", mode, "deltaY");
-                    newMessage.setValue(String.valueOf(deltaY));
-                    communicator.sendMessage(newMessage.makeMessage());
-
-                    long timeBetweenGestures = System.currentTimeMillis() - timeLastMoved;
-                    lastVelocities[2] = lastVelocities[1];
-                    lastVelocities[1] = lastVelocities[0];
-                    lastVelocities[0] = deltaY / timeBetweenGestures;
-                    //System.out.println("Velocities: " + lastVelocities.toString());
-                    timeLastMoved = System.currentTimeMillis();
-
-                    break;
-                }
-                case "IPhoneFlick":
-                case "DecelFlick":
-                case "MultiFlick": {
+                case "DecelFlick": {
                     //** calculations
                     double deltaY = newYposition - lastYposition;
                     lastYposition = newYposition;
@@ -665,7 +528,7 @@ public class MooseActivity extends AppCompatActivity {
 
                      //if want to add speed
                     }else if(autoscroll){
-                        if(!waitThread.isInterrupted()){
+                        if(waitThread != null && !waitThread.isInterrupted()){
                             waitThread.interrupt();
                         }
                     }
@@ -772,7 +635,7 @@ public class MooseActivity extends AppCompatActivity {
             }
 
         }else if(actionType == MotionEvent.ACTION_UP){
-            leftFingerMoving = false;
+
             if(!scrolling){
                 System.out.println("Click!");
                 Message newMessage = new Message("client", "Action", "click");
@@ -787,54 +650,7 @@ public class MooseActivity extends AppCompatActivity {
 
                         break;
                     }
-                    //NONE ADDITATIVE FLICK
-                    case "Flick": {
-                        long deltaTime = System.currentTimeMillis() - downTime; //ms
-                        totalDistance += y-lastYposition;
-                        double speed = (double) totalDistance/deltaTime; // px/ms
-                        // if faster then 0.5sec
-                        if(deltaTime < 501 || speed > 1){ //if time passed is less the 0.5 sec or speed was faster then 1px/ms == 1000px/sec
-                            System.out.println("It was a flick!");
-                            double adjustedSpeed = speed*gainFactor;
-                            autoscroll = true;
-                            //** send information
-                            Message newMessage = new Message("client", mode, "speed");
-                            newMessage.setValue(String.valueOf(adjustedSpeed));
-                            communicator.sendMessage(newMessage.makeMessage());
-                        }
 
-                        break;
-                    }
-                    case "Flick1000": {
-                        long deltaTime = System.currentTimeMillis() - downTime; //ms
-                        totalDistance += y - lastYposition;
-                        double totalSpeed = (double) totalDistance / deltaTime; // px/ms
-                        System.out.println("Speed " + totalSpeed);
-                        if(deltaTime < 501 || Math.abs(totalSpeed) > 1) { //if time passed is less the 0.5 sec or speed was faster then 1px/ms == 1000px/sec
-                            double avgVelocity = (lastVelocities[0] + lastVelocities[1] + lastVelocities[2]) / 3.0;
-                            System.out.println("Velocity " + avgVelocity);
-                            int gain = 1;
-                            if(gestureCount > 3 && gestureCount < 12) {
-                               gain = gestureCount-2;
-
-                            }else if(gestureCount > 11){
-                                gain = 10;
-                            }
-                            double speed = avgVelocity*gain;
-                            System.out.println("Final speed = "+ speed);
-                            //** send information
-                            Message newMessage = new Message("client", mode, "speed");
-                            newMessage.setValue(String.valueOf(speed));
-                            communicator.sendMessage(newMessage.makeMessage());
-                            autoscroll = true;
-
-                        }else{
-                            System.out.println("NO FLICK!");
-                            autoscroll = false;
-                        }
-                        break;
-                    }
-                    case "iOS2":
                     case "iOS":
                         double Vt = ((lastVelocities[0] + lastVelocities[1])/2) - ((lastVelocities[0] - lastVelocities[1])/4);
                         // System.out.println("(1) Vt = " + Vt);
@@ -882,32 +698,10 @@ public class MooseActivity extends AppCompatActivity {
                         }
 
                         break;
-                    case "IPhoneFlick":{
-                        long deltaTime = System.currentTimeMillis() - downTime; //ms
-                        totalDistance += y-lastYposition;
-                        double speed = (double) totalDistance/deltaTime; // px/ms
-                        // if faster then 0.5sec
-                        if(deltaTime < 501 || speed > 1){ //if time passed is less the 0.5 sec or speed was faster then 1px/ms == 1000px/sec
-                            System.out.println("It was a flick!");
-                            double adjustedSpeed = speed*gainFactor;
-                            autoscroll = true;
-                            //** send information
-                            Message newMessage = new Message("client", mode, "speed");
-                            newMessage.setValue(String.valueOf(adjustedSpeed));
-                            communicator.sendMessage(newMessage.makeMessage());
 
-                        }else if(autoscroll){
-                            autoscroll = false;
-                            Message newMessage = new Message("client", mode, "stop");
-                            communicator.sendMessage(newMessage.makeMessage());
-                        }
-
-                        break;
-                    }
 
                     //ADDITATIVE FLICK
-                    case "DecelFlick":
-                    case "MultiFlick": {
+                    case "DecelFlick": {
                         long deltaTime = System.currentTimeMillis() - downTime; //ms
                         totalDistance += y-lastYposition;
                         double speed = (double) totalDistance/deltaTime; // px/ms
@@ -1011,16 +805,12 @@ public class MooseActivity extends AppCompatActivity {
     public Boolean rightTouchAction(float x, float y, int actionType){
         if(actionType == MotionEvent.ACTION_DOWN){
             System.out.println("Right Finger Down");
-            rightFingerPositionY = y;
+
 
         }else if(actionType == MotionEvent.ACTION_MOVE){
-            rightFingerMoving = true;
-            deltaMove[rightFinger] += y - rightFingerPositionY;
-            rightFingerPositionY = y;
-          //  System.out.println("Right Finger Moved");
+            System.out.println("Right Finger Moved");
 
         }else if(actionType == MotionEvent.ACTION_UP){
-            rightFingerMoving = false;
             System.out.println("Right Finger Up");
 
         }  else {
@@ -1100,21 +890,6 @@ public class MooseActivity extends AppCompatActivity {
 
                 break;
             }
-            case "DragAcceleration": {
-                sensitivity = 5;
-                setBar("sens", sensitivity, 20);
-
-                gainFactor = 1.3; //is used in conjunction with speed -> the higher the slower
-                setBar("gain", gainFactor, 2);
-
-                break;
-            }
-            case "Thumb":{
-                sensitivity = 5;
-                setBar("sens", sensitivity, 20);
-
-                break;
-            }
             case "TrackPoint": {
                 sensitivity = 1;
                 setBar("sens", sensitivity, 20);
@@ -1138,19 +913,11 @@ public class MooseActivity extends AppCompatActivity {
 
                 break;
             }
-            case "Flick": {
-                gainFactor = 1.3; //linear
-                setBar("gain", gainFactor, 5);
-
-                break;
-            }
             case "iOS":{
                 sensitivity = 70;
                 setBar("sens", sensitivity, 200);
                 break;
             }
-            case "IPhoneFlick":
-            case "MultiFlick":
             case "DecelFlick": {
                 sensitivity = 100;
                 setBar("sens", sensitivity, 300);
@@ -1210,6 +977,13 @@ public class MooseActivity extends AppCompatActivity {
 
                } else if(m.getActionName().equals("RequestData")){
                    //*** send data
+                   Message newMessage3 = new Message("client", "Data", "touchAreaSize");
+                   //System.out.println("TouchA. start: "+ touchView.getX() + " / " + touchView.getY()); //should be 0/0
+                   String touchAreaDimensions =  (touchView.getX()+touchView.getWidth()) + " / " + (touchView.getY()+touchView.getHeight());
+                   newMessage3.setValue(touchAreaDimensions);
+                   communicator.sendMessage(newMessage3.makeMessage());
+
+
                    Message newMessage = new Message("client", "Data", "fingerCount");
                    newMessage.setValue(String.valueOf(fingerCount));
                    communicator.sendMessage(newMessage.makeMessage());
