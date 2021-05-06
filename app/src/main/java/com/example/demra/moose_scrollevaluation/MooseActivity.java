@@ -482,13 +482,36 @@ public class MooseActivity extends AppCompatActivity {
                         double deltaY = newYposition - lastYposition;
                         lastYposition = newYposition;
                         totalDistance += deltaY;
-                        System.out.println("finger move delta -- " + deltaY);
-                        //if smaller 10 it might just be a little adaption of the finger
+                        //System.out.println("finger move delta -- " + deltaY);
+
+
+                       /* System.out.println("TbG: " + timeBetweenGestures);
+                        //check if slowed down in movement -> stop auto-scroll start drag
+                        if( autoscroll && timeBetweenGestures > sensitivity){
+                            //continue dragging
+                            autoscroll = false;
+                            flickGestureCount = 1;
+                            gain = 1;
+                            Message newMessage = new Message("client", mode, "stop");
+                            communicator.sendMessage(newMessage.makeMessage());
+                        } */
+
+                        //check if new flick -> interrupt wait
+                        //if smaller 3 it might just be a little adaption of the finger
                         if (autoscroll && Math.abs(deltaY) > 3) {
                             if (!waitThread.isInterrupted()) {
                                 System.out.println("Interrupt wait thread");
                                 waitThread.interrupt();
                             }
+
+                        }else if (autoscroll && Math.abs(deltaY) < 3) {
+                            //continue dragging
+                            autoscroll = false;
+                            flickGestureCount = 1;
+                            gain = 1;
+                            System.out.println("Switch to Drag");
+                            Message newMessage = new Message("client", mode, "stop");
+                            communicator.sendMessage(newMessage.makeMessage());
                         }
 
                         if (!autoscroll) {
@@ -668,7 +691,7 @@ public class MooseActivity extends AppCompatActivity {
                             System.out.println("(2) Flick V " + flickVelocity);
 
                             //the value is incremented from the fourth contact onward
-                            if(flickGestureCount > 3) {
+                            if(flickGestureCount > 1) {
                                 // by 1/480 (k − 1) for each point of finger movement
                                 double pointsMoved = Math.abs(totalDistance / pxPerPoint);
                                 double incrementVal = ((flickGestureCount - 1) / 480.0) * pointsMoved;
@@ -748,7 +771,7 @@ public class MooseActivity extends AppCompatActivity {
     }
 
     private double getCap(int gestureCount) {
-        if (gestureCount < 4) {
+        /* if (gestureCount < 4) {
             return 1;
 
         }else if(gestureCount > 9){
@@ -756,7 +779,19 @@ public class MooseActivity extends AppCompatActivity {
 
         }else{
             return getCap(gestureCount-1) + 0.45*(gestureCount-1);
+        } */
+
+        if (gestureCount < 3) {
+            return 1;
+
+        }else if(gestureCount > 9){
+            return 5;
+
+        }else{
+            return getCap(gestureCount-1) + 0.45*(gestureCount-1);
         }
+
+
     }
 
     public void sendNewStroke(double amplitude, double deltaT_sec){
