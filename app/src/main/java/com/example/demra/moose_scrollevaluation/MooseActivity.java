@@ -237,6 +237,7 @@ public class MooseActivity extends AppCompatActivity {
 
         } else if (event.getAction() == MotionEvent.ACTION_MOVE) {
             int pointerCount = event.getPointerCount();
+            updatePointerCount(pointerCount);
 
             // Get the Pointer ID of the (currently) moving pointer
             for (int i = 0; i < pointerCount && i < MAX_POINTER; i++) {
@@ -330,7 +331,7 @@ public class MooseActivity extends AppCompatActivity {
     }
 
     private void updatePointerCount(int pointerCount) {
-        if(fingerCount < pointerCount){
+         if(fingerCount < pointerCount){
             fingerCount = pointerCount;
         }
     }
@@ -538,17 +539,18 @@ public class MooseActivity extends AppCompatActivity {
                     lastYposition = newYposition;
                     totalDistance += deltaY;
 
-                    long deltaTime = System.currentTimeMillis() - timeLastMoved;
-                    timeLastMoved = System.currentTimeMillis();
+                    // long deltaTime = System.currentTimeMillis() - timeLastMoved;
+                    // timeLastMoved = System.currentTimeMillis();
+                    System.out.println("dY " + deltaY);
                     //if slowed down in between
-                    if( autoscroll && deltaTime > sensitivity){
+                    if(autoscroll && Math.abs(deltaY) < 3){
                         //continue dragging
                         autoscroll = false;
                         Message newMessage = new Message("client", mode, "stop");
                         communicator.sendMessage(newMessage.makeMessage());
 
                      //if want to add speed
-                    }else if(autoscroll){
+                    }else if(autoscroll && Math.abs(deltaY) > 3){
                         if(waitThread != null && !waitThread.isInterrupted()){
                             waitThread.interrupt();
                         }
@@ -731,7 +733,7 @@ public class MooseActivity extends AppCompatActivity {
                         double speed = (double) totalDistance/deltaTime; // px/ms
 
                         // if faster then 0.5sec
-                        if(deltaTime < 501 || speed > 1){ //if time passed is less the 0.5 sec or speed was faster then 1px/ms == 1000px/sec
+                        if(deltaTime < 501 ){ //if time passed is less the 0.5 sec [or speed was faster then 1px/ms == 1000px/sec]
                             System.out.println("It was a flick!");
                             double adjustedSpeed = speed*gainFactor;
                             if(!autoscroll) {
@@ -926,6 +928,7 @@ public class MooseActivity extends AppCompatActivity {
 
                 break;
             }
+            //Rate based
             case "TrackPoint": {
                 sensitivity = 1;
                 setBar("sens", sensitivity, 20);
@@ -945,12 +948,8 @@ public class MooseActivity extends AppCompatActivity {
 
                 break;
             }
-            case "Rubbing": {
-
-                break;
-            }
             case "iOS":{
-                sensitivity = 70;
+                sensitivity = 100;
                 setBar("sens", sensitivity, 300);
                 //reset Parameters
                 flickGestureCount = 1;
@@ -963,7 +962,7 @@ public class MooseActivity extends AppCompatActivity {
                 sensitivity = 100;
                 setBar("sens", sensitivity, 300);
 
-                gainFactor = 1.3; //linear
+                gainFactor = 1; //1.3; //linear
                 setBar("gain", gainFactor, 5);
                 //reset Parameters
                 autoscroll = false;
@@ -1025,7 +1024,6 @@ public class MooseActivity extends AppCompatActivity {
                    String touchAreaDimensions =  (touchView.getX()+touchView.getWidth()) + " / " + (touchView.getY()+touchView.getHeight());
                    newMessage3.setValue(touchAreaDimensions);
                    communicator.sendMessage(newMessage3.makeMessage());
-
 
                    Message newMessage = new Message("client", "Data", "fingerCount");
                    newMessage.setValue(String.valueOf(fingerCount));

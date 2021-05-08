@@ -155,7 +155,7 @@ public class Communicator {
                     activity.onContentChanged();
                 }
             }); */
-            System.out.println("Client - message send.");
+           // System.out.println("Client - message send.");
         }
     }
 }
