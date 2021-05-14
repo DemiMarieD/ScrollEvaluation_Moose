@@ -1019,21 +1019,14 @@ public class MooseActivity extends AppCompatActivity {
 
                } else if(m.getActionName().equals("RequestData")){
                    //*** send data
-                   Message newMessage3 = new Message("client", "Data", "touchAreaSize");
-                   //System.out.println("TouchA. start: "+ touchView.getX() + " / " + touchView.getY()); //should be 0/0
-                   String touchAreaDimensions =  (touchView.getX()+touchView.getWidth()) + " / " + (touchView.getY()+touchView.getHeight());
-                   newMessage3.setValue(touchAreaDimensions);
-                   communicator.sendMessage(newMessage3.makeMessage());
-
-                   Message newMessage = new Message("client", "Data", "fingerCount");
-                   newMessage.setValue(String.valueOf(fingerCount));
+                   //format scrollArea-FingerCount-MinMaxPosition
+                   // x/y-n-x/y,x/
+                   String touchAreaDimensions =  (touchView.getX()+touchView.getWidth()) + "/" + (touchView.getY()+touchView.getHeight());
+                   String minMaxPositions = minX + "/" + minY + "," + maxX + "/"+ maxY;
+                   String data = touchAreaDimensions + "-"+ fingerCount + "-" + minMaxPositions;
+                   Message newMessage = new Message("client", "Data", "save");
+                   newMessage.setValue(data);
                    communicator.sendMessage(newMessage.makeMessage());
-
-                   Message newMessage2 = new Message("client", "Data", "minMax");
-                   //make look like: minX/minY,maxX/maxY
-                   String data = minX+"/"+minY+","+maxX+"/"+maxY;
-                   newMessage2.setValue(String.valueOf(data));
-                   communicator.sendMessage(newMessage2.makeMessage());
 
                    //***  reset vars
                    minX = 10000;
