@@ -31,10 +31,13 @@ public class MooseActivity extends AppCompatActivity {
     private ConstraintLayout touchView;
 
     private TextView tvInfo;
+    /*
     private TextView gainLable;
     private SeekBar seekbar_gain;
     private TextView sensitivityLable;
     private SeekBar seekbar_sens;
+    */
+
 
     private String mode = "";
 
@@ -62,8 +65,23 @@ public class MooseActivity extends AppCompatActivity {
     private double[] p2;
     private double[] p3;
     private int touchPointCounter;
-    private int sensitivity;  //used for
-    private double gainFactor; // used by rate-based
+
+   // private int s_rubbing;
+    private int s_circle = 8;
+    private int s_flickDecel = 100;
+    private int s_iOS = 100;
+    private int s_drag = 5;
+    private int s_ratebase = 1;
+
+   // private double g_rubbing;
+    private double g_circle = 70;
+    private double g_flickDecel = 1;
+   // private double g_iOS;
+    private double g_drag = 1;
+    private double g_ratebase = 1.5;
+
+   // private int sensitivity;  //used for
+   // private double gainFactor; // used by rate-based
 
     //For Flicking
     private long downTime;
@@ -130,6 +148,7 @@ public class MooseActivity extends AppCompatActivity {
         communicator.setActivity(this);
 
         //SETTINGS INPUTS
+        /*
         gainLable = findViewById(R.id.gainLable);
         gainLable.setVisibility(View.INVISIBLE);
         seekbar_gain = findViewById(R.id.seekBar_gain);
@@ -173,7 +192,7 @@ public class MooseActivity extends AppCompatActivity {
             public void onStopTrackingTouch(SeekBar seekBar) {
 
             }
-        });
+        }); */
 
 
         //SCROLL WHEEL THINGS
@@ -402,7 +421,7 @@ public class MooseActivity extends AppCompatActivity {
                     timeLastMoved = downTime;
                     totalDistance = 0;
                     if(autoscroll){
-                       waitThread =  new Thread(new WaitOnMovement_Thread());
+                       waitThread =  new Thread(new WaitOnMovement_Thread(s_flickDecel));
                        waitThread.start();
                     }
                     break;
@@ -421,7 +440,7 @@ public class MooseActivity extends AppCompatActivity {
 
                     if (autoscroll) {
                         System.out.println("Wait");
-                        waitThread = new Thread(new WaitOnMovement_Thread());
+                        waitThread = new Thread(new WaitOnMovement_Thread(s_iOS));
                         waitThread.start();
                     }
 
@@ -460,12 +479,12 @@ public class MooseActivity extends AppCompatActivity {
 
             switch (mode) {
                 case "Drag":
-                    if (touchPointCounter % sensitivity == 0) {
+                    if (touchPointCounter % s_drag == 0) {
                         //** calculations
                         double deltaY = newYposition - lastYposition;
                         lastYposition = newYposition;
 
-                        double dragDelta = deltaY * gainFactor * -1;
+                        double dragDelta = deltaY * g_drag ;  //no change of direction -> no * -1
 
                         //** send information
                         Message newMessage = new Message("client", "Drag", "deltaY");
@@ -567,10 +586,10 @@ public class MooseActivity extends AppCompatActivity {
                     break;
                 }
                 case "TrackPoint": {
-                   if (touchPointCounter % sensitivity == 0) {
+                   if (touchPointCounter % s_ratebase == 0) {
                         float deltaY = (float) (newYposition - lastYposition); //lastPosition is not changing ! so equal start pos.
                         //double gainFactor = 1.5; // 1.3 used in multi-scroll by cockburn
-                        double deltaMove = Math.pow(Math.abs(deltaY), gainFactor) / 1000; //to get per sec ?!
+                        double deltaMove = Math.pow(Math.abs(deltaY), g_ratebase) / 1000; //to get per sec ?!
                         int direction = (int) (deltaY/Math.abs(deltaY));
 
                         //** send information
@@ -585,7 +604,7 @@ public class MooseActivity extends AppCompatActivity {
                 case "Circle3": {
                     touchPointCounter++; //skip some points to make it smoother
 
-                    if (touchPointCounter % sensitivity == 0) {
+                    if (touchPointCounter % s_circle == 0) {
                         if (p2.length == 0) {
                             p2 = new double[]{x, y};
 
@@ -735,7 +754,7 @@ public class MooseActivity extends AppCompatActivity {
                         // if faster then 0.5sec
                         if(deltaTime < 501 ){ //if time passed is less the 0.5 sec [or speed was faster then 1px/ms == 1000px/sec]
                             System.out.println("It was a flick!");
-                            double adjustedSpeed = speed*gainFactor;
+                            double adjustedSpeed = speed*g_flickDecel;
                             if(!autoscroll) {
                                 autoscroll = true;
                                 //** send information
@@ -887,7 +906,7 @@ public class MooseActivity extends AppCompatActivity {
         //*************************************************
 
         //scrolling distance = angle * R / 2pi; R = 220px [2014]
-        double scrollingDistance = angle*gainFactor / 2*Math.PI;
+        double scrollingDistance = angle*g_circle / 2*Math.PI;
         //System.out.println("Scrolling distance: " + scrollingDistance);
 
         //direction = sign of dot product v1 v2
@@ -913,6 +932,11 @@ public class MooseActivity extends AppCompatActivity {
     private void setParameter(){
         tvInfo.setText("Mode is: " + mode);
         scrollWheel.setVisibility(View.INVISIBLE);
+        if ("ScrollWheel".equals(mode)) {
+            scrollWheel.setVisibility(View.VISIBLE);
+        }
+
+        /*
         seekbar_gain.setVisibility(View.INVISIBLE);
         gainLable.setVisibility(View.INVISIBLE);
         seekbar_sens.setVisibility(View.INVISIBLE);
@@ -969,16 +993,13 @@ public class MooseActivity extends AppCompatActivity {
 
                 break;
             }
-            case "ScrollWheel": {
-                scrollWheel.setVisibility(View.VISIBLE);
-                break;
-            }
-        }
+
+         */
 
 
     }
 
-    public void setBar(String kind, double progress, int max){
+   /* public void setBar(String kind, double progress, int max){
         if(kind.equals("gain")){
             seekbar_gain.setMax((int) (max*100));
             seekbar_gain.setProgress((int) (progress*100));
@@ -996,7 +1017,7 @@ public class MooseActivity extends AppCompatActivity {
             sensitivityLable.setText("Insensitivity: " + sensitivity);
             sensitivityLable.setVisibility(View.VISIBLE);
         }
-    }
+    } */
 
     @Override
     public void onContentChanged() {
@@ -1044,10 +1065,16 @@ public class MooseActivity extends AppCompatActivity {
     }
 
     class WaitOnMovement_Thread implements Runnable {
+        int waitTime;
+
+        public WaitOnMovement_Thread(int sens){
+            waitTime = sens;
+        }
+
         @Override
         public void run() {
             try {
-                Thread.sleep(sensitivity);
+                Thread.sleep(waitTime);
                 thisActivity.runOnUiThread(new Runnable() {
                     @Override
                     public void run() {
