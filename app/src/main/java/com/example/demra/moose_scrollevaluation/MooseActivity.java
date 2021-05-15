@@ -74,7 +74,7 @@ public class MooseActivity extends AppCompatActivity {
     private int s_ratebase = 1;
 
    // private double g_rubbing;
-    private double g_circle = 70;
+    private double g_circle = 45;
     private double g_flickDecel = 1;
    // private double g_iOS;
     private double g_drag = 1;
@@ -436,6 +436,7 @@ public class MooseActivity extends AppCompatActivity {
                     }
                     lastVelocities = new double[]{0.0, 0.0, 0.0};
                     timeLastMoved = System.currentTimeMillis();
+                    totalDistance = 0;
                     touchPointCounter = 2;
 
                     if (autoscroll) {
@@ -712,8 +713,9 @@ public class MooseActivity extends AppCompatActivity {
                             System.out.println("(2) Flick V " + flickVelocity);
 
                             //the value is incremented from the fourth contact onward
-                            if(flickGestureCount > 1) {
+                            if(flickGestureCount > 3) {
                                 // by 1/480 (k − 1) for each point of finger movement
+                                totalDistance += y-lastYposition;
                                 double pointsMoved = Math.abs(totalDistance / pxPerPoint);
                                 double incrementVal = ((flickGestureCount - 1) / 480.0) * pointsMoved;
                                 System.out.println("(2*) increment gain  " + incrementVal);
@@ -777,9 +779,7 @@ public class MooseActivity extends AppCompatActivity {
 
                         break;
                     }
-
-
-
+                    
 
                 }
             }
@@ -792,7 +792,7 @@ public class MooseActivity extends AppCompatActivity {
     }
 
     private double getCap(int gestureCount) {
-        /* if (gestureCount < 4) {
+        if (gestureCount < 4) {
             return 1;
 
         }else if(gestureCount > 9){
@@ -800,18 +800,7 @@ public class MooseActivity extends AppCompatActivity {
 
         }else{
             return getCap(gestureCount-1) + 0.45*(gestureCount-1);
-        } */
-
-        if (gestureCount < 3) {
-            return 1;
-
-        }else if(gestureCount > 9){
-            return 5;
-
-        }else{
-            return getCap(gestureCount-1) + 0.45*(gestureCount-1);
         }
-
 
     }
 
