@@ -24,7 +24,7 @@ import java.util.Vector;
 
 public class MooseActivity extends AppCompatActivity {
 
-    private final int TOUCH_AREA_HEIGHT_MM = 70; //mm = 7cm
+    private final int TOUCH_AREA_HEIGHT_MM = 100; //mm = 7cm
     private int touchAreaHeight; //px 600 might be best
     private AppCompatActivity thisActivity;
     private Communicator communicator;
@@ -67,15 +67,13 @@ public class MooseActivity extends AppCompatActivity {
     private int touchPointCounter;
 
    // private int s_rubbing;
-    private int s_circle = 8;
-    private int s_flickDecel = 100;
+    private int s_circle = 4;
     private int s_iOS = 100;
     private int s_drag = 5;
     private int s_ratebase = 1;
 
    // private double g_rubbing;
-    private double g_circle = 45;
-    private double g_flickDecel = 1;
+    private double g_circle = 80;
    // private double g_iOS;
     private double g_drag = 1;
     private double g_ratebase = 1.5;
@@ -84,7 +82,6 @@ public class MooseActivity extends AppCompatActivity {
    // private double gainFactor; // used by rate-based
 
     //For Flicking
-    private long downTime;
     private int totalDistance;
     private Boolean autoscroll;
     private Thread waitThread;
@@ -103,12 +100,6 @@ public class MooseActivity extends AppCompatActivity {
     private long T1;
     private long timeLastMoved;
     private int k = 2/3; //constant optimized empirically by Malacria
-
-    //EXTRA
-    private final int SCROLLWHEEL_NOTCH_SIZE_MM = 1;
-    int notchSize_px;
-    private ImageButton scrollWheel;
-
 
 
     @Override
@@ -147,72 +138,6 @@ public class MooseActivity extends AppCompatActivity {
         communicator = Communicator.getInstance();
         communicator.setActivity(this);
 
-        //SETTINGS INPUTS
-        /*
-        gainLable = findViewById(R.id.gainLable);
-        gainLable.setVisibility(View.INVISIBLE);
-        seekbar_gain = findViewById(R.id.seekBar_gain);
-        seekbar_gain.setVisibility(View.INVISIBLE);
-        seekbar_gain.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
-            @Override
-            public void onProgressChanged(SeekBar seekBar, int i, boolean b) {
-                gainLable.setText("Gain: " + (double) i/100);
-                gainFactor = (double) i/100;
-            }
-
-            @Override
-            public void onStartTrackingTouch(SeekBar seekBar) {
-
-            }
-
-            @Override
-            public void onStopTrackingTouch(SeekBar seekBar) {
-
-            }
-        });
-
-
-        sensitivityLable = findViewById(R.id.smoothLable);
-        sensitivityLable.setVisibility(View.INVISIBLE);
-        seekbar_sens = findViewById(R.id.seekBar_smooth);
-        seekbar_sens.setVisibility(View.INVISIBLE);
-        seekbar_sens.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
-            @Override
-            public void onProgressChanged(SeekBar seekBar, int i, boolean b) {
-                sensitivityLable.setText("Insensitivity: " +  i);
-                sensitivity =  i;
-            }
-
-            @Override
-            public void onStartTrackingTouch(SeekBar seekBar) {
-
-            }
-
-            @Override
-            public void onStopTrackingTouch(SeekBar seekBar) {
-
-            }
-        }); */
-
-
-        //SCROLL WHEEL THINGS
-        scrollWheel = findViewById(R.id.scrollWheel);
-        scrollWheel.getLayoutParams().height = touchAreaHeight;
-        scrollWheel.getLayoutParams().width = (touchAreaHeight) / 4;
-        scrollWheel.setVisibility(View.INVISIBLE);
-        notchSize_px = (int) TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_MM, SCROLLWHEEL_NOTCH_SIZE_MM, getResources().getDisplayMetrics());
-        //Scroll Effects
-       // v = (Vibrator) this.getSystemService(Context.VIBRATOR_SERVICE);
-        scrollWheel.setOnTouchListener(new View.OnTouchListener() {
-            @Override
-            public boolean onTouch(View view, MotionEvent motionEvent) {
-                //check if mode is set and not paging (paging is implemented on buttons directly
-                if(mode.equals("ScrollWheel")) {
-                    scrollWheel_Action(motionEvent.getRawY(), motionEvent.getAction());
-                }
-                return true;
-            }
-        });
     }
 
     @Override
@@ -230,10 +155,7 @@ public class MooseActivity extends AppCompatActivity {
             // System.out.println("ID " + actionIndex + " pressure: " + event.getPressure(actionIndex));
             // System.out.println("Finger DOWN: " + event.getPointerId(actionIndex) + " at pos: " + pointerX + "/" + pointerY);
 
-            if(isPointInsideView(pointerX, pointerY, scrollWheel) && mode.equals("ScrollWheel")){
-                scrollWheel_Action(pointerY, MotionEvent.ACTION_DOWN);
-
-            }else if(isPointInsideView(pointerX, pointerY, touchView)){
+            if(isPointInsideView(pointerX, pointerY, touchView)){
                 int maxLeftX = 2*(touchView.getWidth()/3);
 
                 if(event.getPointerCount() > 1){
@@ -242,8 +164,8 @@ public class MooseActivity extends AppCompatActivity {
                         touchAction(pointerX, pointerY, MotionEvent.ACTION_DOWN);
 
                     }else{
-                        // System.out.println("TOUCH DOWN right Finger in TouchView!");
-                        rightTouchAction(pointerX, pointerY, MotionEvent.ACTION_DOWN);
+                         System.out.println("TOUCH DOWN right Finger in TouchView!");
+                       // rightTouchAction(pointerX, pointerY, MotionEvent.ACTION_DOWN);
                     }
 
                 //If only one finger it should be in the left part of the screen
@@ -272,10 +194,7 @@ public class MooseActivity extends AppCompatActivity {
                     // System.out.println("Finger moved: " + pointerId + " at pos: " + pointerX + "/" + pointerY);
                     // System.out.println("ID " + i + " pressure: " + event.getPressure(i));
 
-                    if(isPointInsideView(pointerX, pointerY, scrollWheel) && mode.equals("ScrollWheel")){
-                        scrollWheel_Action( pointerY, MotionEvent.ACTION_MOVE);
-
-                    }else if (isPointInsideView(pointerX, pointerY, touchView)) {
+                   if (isPointInsideView(pointerX, pointerY, touchView)) {
                         int maxLeftX = 2*(touchView.getWidth()/3);
 
                         if(event.getPointerCount() > 1){
@@ -284,8 +203,8 @@ public class MooseActivity extends AppCompatActivity {
                                 touchAction(pointerX, pointerY, MotionEvent.ACTION_MOVE);
 
                             }else{
-                                // System.out.println("MOVED right Finger in TouchView!");
-                                rightTouchAction(pointerX, pointerY, MotionEvent.ACTION_MOVE);
+                                 System.out.println("MOVED right Finger in TouchView!");
+                                //rightTouchAction(pointerX, pointerY, MotionEvent.ACTION_MOVE);
                             }
 
                         //If only one finger it should be in the left part of the screen
@@ -313,11 +232,7 @@ public class MooseActivity extends AppCompatActivity {
             updateMinMax(pointerX, pointerY);
 
             //Check Target View
-            if(isPointInsideView(pointerX, pointerY, scrollWheel) && mode.equals("ScrollWheel")){
-                scrollWheel_Action( pointerY, MotionEvent.ACTION_UP);
-
-
-            }else if (isPointInsideView(pointerX, pointerY, touchView)) {
+            if (isPointInsideView(pointerX, pointerY, touchView)) {
 
                 int maxLeftX = 2*(touchView.getWidth()/3);
 
@@ -328,16 +243,16 @@ public class MooseActivity extends AppCompatActivity {
                         touchAction(pointerX, pointerY, MotionEvent.ACTION_UP);
 
                     }else{
-                        //   System.out.println("UP right Finger in TouchView!");
-                        rightTouchAction(pointerX, pointerY, MotionEvent.ACTION_UP);
+                          System.out.println("UP right Finger in TouchView!");
+                        // rightTouchAction(pointerX, pointerY, MotionEvent.ACTION_UP);
                     }
 
                 //If only one finger it should be in the left part of the screen
                 } else if (pointerX <  maxLeftX )  {
                     return touchAction(pointerX, pointerY, MotionEvent.ACTION_UP);
-
                 }
 
+            //if up is outside touch area
             }else if(mode.equals("TrackPoint")){
                 // stop for rate-based / trackpoint
                 Message newMessage = new Message("client", "TrackPoint", "stop");
@@ -415,17 +330,6 @@ public class MooseActivity extends AppCompatActivity {
             //startXposition = x;
 
             switch (mode) {
-
-                case "DecelFlick": {
-                    downTime = System.currentTimeMillis();
-                    timeLastMoved = downTime;
-                    totalDistance = 0;
-                    if(autoscroll){
-                       waitThread =  new Thread(new WaitOnMovement_Thread(s_flickDecel));
-                       waitThread.start();
-                    }
-                    break;
-                }
                 case "iOS": {
                     long timeBetweenGestures = System.currentTimeMillis() - timeLastMoved;
                     if (timeBetweenGestures < 900) {
@@ -435,6 +339,7 @@ public class MooseActivity extends AppCompatActivity {
                         gain = 1;
                     }
                     lastVelocities = new double[]{0.0, 0.0, 0.0};
+
                     timeLastMoved = System.currentTimeMillis();
                     totalDistance = 0;
                     touchPointCounter = 2;
@@ -551,39 +456,6 @@ public class MooseActivity extends AppCompatActivity {
                         timeLastMoved = System.currentTimeMillis();
 
                     //}
-                    break;
-                }
-                case "DecelFlick": {
-                    //** calculations
-                    double deltaY = newYposition - lastYposition;
-                    lastYposition = newYposition;
-                    totalDistance += deltaY;
-
-                    // long deltaTime = System.currentTimeMillis() - timeLastMoved;
-                    // timeLastMoved = System.currentTimeMillis();
-                    System.out.println("dY " + deltaY);
-                    //if slowed down in between
-                    if(autoscroll && Math.abs(deltaY) < 3){
-                        //continue dragging
-                        autoscroll = false;
-                        Message newMessage = new Message("client", mode, "stop");
-                        communicator.sendMessage(newMessage.makeMessage());
-
-                     //if want to add speed
-                    }else if(autoscroll && Math.abs(deltaY) > 3){
-                        if(waitThread != null && !waitThread.isInterrupted()){
-                            waitThread.interrupt();
-                        }
-                    }
-
-                    if(!autoscroll) {
-                        //** send information
-                        Message newMessage = new Message("client", mode, "deltaY");
-                        newMessage.setValue(String.valueOf(deltaY));
-                        communicator.sendMessage(newMessage.makeMessage());
-                    }
-                    //else if auto-scroll the collected changes will be added to the speed in the end
-
                     break;
                 }
                 case "TrackPoint": {
@@ -705,7 +577,7 @@ public class MooseActivity extends AppCompatActivity {
                         double minSpeed_sec = 250 * pxPerPoint;
                         double minSpeed_ms = minSpeed_sec / 1000;
                         System.out.println(" *Min speed = " + minSpeed_ms);
-
+                        //todo maybe adapt?
                         if(Math.abs(Vt) > minSpeed_ms){
                             double Vt_minus1 = ((lastVelocities[1] + lastVelocities[2])/2) - ((lastVelocities[1] - lastVelocities[2])/4);
                             //1/4Vt + 3/4Vt−1, which is used as the flick velocity
@@ -740,46 +612,11 @@ public class MooseActivity extends AppCompatActivity {
                             autoscroll = true;
 
                         }else{
-                            System.out.println("NO FLICK!");
+                            System.out.println("NO FLICK! - too slow " + Math.abs(Vt));
                             autoscroll = false;
                         }
 
                         break;
-
-
-                    //ADDITATIVE FLICK
-                    case "DecelFlick": {
-                        long deltaTime = System.currentTimeMillis() - downTime; //ms
-                        totalDistance += y-lastYposition;
-                        double speed = (double) totalDistance/deltaTime; // px/ms
-
-                        // if faster then 0.5sec
-                        if(deltaTime < 501 ){ //if time passed is less the 0.5 sec [or speed was faster then 1px/ms == 1000px/sec]
-                            System.out.println("It was a flick!");
-                            double adjustedSpeed = speed*g_flickDecel;
-                            if(!autoscroll) {
-                                autoscroll = true;
-                                //** send information
-                                Message newMessage = new Message("client", mode, "speed");
-                                newMessage.setValue(String.valueOf(adjustedSpeed));
-                                communicator.sendMessage(newMessage.makeMessage());
-
-                            }else{
-                                //** send information
-                                Message newMessage = new Message("client", mode, "addSpeed");
-                                newMessage.setValue(String.valueOf(speed));
-                                communicator.sendMessage(newMessage.makeMessage());
-                            }
-
-                        }else if(autoscroll){
-                            autoscroll = false;
-                            Message newMessage = new Message("client", mode, "stop");
-                            communicator.sendMessage(newMessage.makeMessage());
-                        }
-
-                        break;
-                    }
-                    
 
                 }
             }
@@ -818,52 +655,6 @@ public class MooseActivity extends AppCompatActivity {
 
         frequencies.set(1, frequencies.get(0));
         frequencies.set(0, currentFrequency);
-    }
-
-    public void scrollWheel_Action (float y, int actionType){
-        if (actionType == MotionEvent.ACTION_DOWN) {
-            lastYposition = y;
-
-        } else if (actionType == MotionEvent.ACTION_MOVE) {
-
-            double newYposition = y;
-            //check if still touching scroll wheel
-            if((scrollWheel.getY() <= newYposition) && ((scrollWheel.getY()+scrollWheel.getHeight()) >= newYposition)) {
-                //** calculations
-                double deltaY = newYposition - lastYposition;
-                if (Math.abs(deltaY) >= notchSize_px) {
-                    int deltaNotches = (int) deltaY / notchSize_px;
-
-                    //v.vibrate(10);
-
-                    //** send information
-                    Message newMessage = new Message("client", "ScrollWheel", "deltaNotches");
-                    newMessage.setValue(String.valueOf(deltaNotches));
-                    communicator.sendMessage(newMessage.makeMessage());
-
-                    lastYposition = lastYposition + (deltaNotches * notchSize_px);
-                }
-            }
-
-        }
-    }
-
-    public Boolean rightTouchAction(float x, float y, int actionType){
-        if(actionType == MotionEvent.ACTION_DOWN){
-            System.out.println("Right Finger Down");
-
-
-        }else if(actionType == MotionEvent.ACTION_MOVE){
-            System.out.println("Right Finger Moved");
-
-        }else if(actionType == MotionEvent.ACTION_UP){
-            System.out.println("Right Finger Up");
-
-        }  else {
-            System.out.println("Other action <" + actionType + "> detected.");
-        }
-        return scrolling;
-
     }
 
     private void calculateAndSendAngle_2() {
@@ -918,95 +709,6 @@ public class MooseActivity extends AppCompatActivity {
         communicator.sendMessage(newMessage.makeMessage());
     }
 
-    private void setParameter(){
-        tvInfo.setText("Mode is: " + mode);
-        scrollWheel.setVisibility(View.INVISIBLE);
-        if ("ScrollWheel".equals(mode)) {
-            scrollWheel.setVisibility(View.VISIBLE);
-        }
-
-        /*
-        seekbar_gain.setVisibility(View.INVISIBLE);
-        gainLable.setVisibility(View.INVISIBLE);
-        seekbar_sens.setVisibility(View.INVISIBLE);
-        sensitivityLable.setVisibility(View.INVISIBLE);
-
-        switch (mode) {
-            case "Drag": {
-                sensitivity = 5;
-                setBar("sens", sensitivity, 20);
-
-                gainFactor = 1; //linear
-                setBar("gain", gainFactor, 10);
-
-                break;
-            }
-            //Rate based
-            case "TrackPoint": {
-                sensitivity = 1;
-                setBar("sens", sensitivity, 20);
-
-                gainFactor = 1.5; //exponential  [ 1.3 used in multi-scroll by cockburn ]
-                //todo dont see that much effect ..
-                setBar("gain", gainFactor, 5);
-
-                break;
-            }
-            case "Circle3": {
-                sensitivity = 8;
-                setBar("sens", sensitivity, 20);
-
-                gainFactor = 45.0; //multiplied with angle, the higher the faster; R = 220px
-                setBar("gain", gainFactor, 200);
-
-                break;
-            }
-            case "iOS":{
-                sensitivity = 100;
-                setBar("sens", sensitivity, 300);
-                //reset Parameters
-                flickGestureCount = 1;
-                gain = 1;
-                autoscroll = false;
-
-                break;
-            }
-            case "DecelFlick": {
-                sensitivity = 100;
-                setBar("sens", sensitivity, 300);
-
-                gainFactor = 1; //1.3; //linear
-                setBar("gain", gainFactor, 5);
-                //reset Parameters
-                autoscroll = false;
-
-                break;
-            }
-
-         */
-
-
-    }
-
-   /* public void setBar(String kind, double progress, int max){
-        if(kind.equals("gain")){
-            seekbar_gain.setMax((int) (max*100));
-            seekbar_gain.setProgress((int) (progress*100));
-            seekbar_gain.setVisibility(View.VISIBLE);
-
-            gainFactor = progress;
-            gainLable.setText("Gain: " + gainFactor);
-            gainLable.setVisibility(View.VISIBLE);
-
-        }else if(kind.equals("sens")){
-            seekbar_sens.setProgress((int) progress);
-            seekbar_sens.setMax(max);
-            seekbar_sens.setVisibility(View.VISIBLE);
-
-            sensitivityLable.setText("Insensitivity: " + sensitivity);
-            sensitivityLable.setVisibility(View.VISIBLE);
-        }
-    } */
 
     @Override
     public void onContentChanged() {
@@ -1017,7 +719,8 @@ public class MooseActivity extends AppCompatActivity {
             Message m = new Message(status);
             if(m.getActionType().equals("Mode")) {
                 mode = m.getActionName();
-                setParameter();
+                //setParameter();
+                tvInfo.setText("Mode is: " + mode);
 
             }else if(m.getActionType().equals("Back")){
                 onBackPressed();
