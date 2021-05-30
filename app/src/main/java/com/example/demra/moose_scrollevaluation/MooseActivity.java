@@ -29,7 +29,7 @@ public class MooseActivity extends AppCompatActivity {
     private AppCompatActivity thisActivity;
     private Communicator communicator;
     private ConstraintLayout touchView;
-
+    private View divider;
     private TextView tvInfo;
     /*
     private TextView gainLable;
@@ -90,6 +90,7 @@ public class MooseActivity extends AppCompatActivity {
     private int flickGestureCount;
     private double[] lastVelocities;
     private double gain;
+    private long timeLastFlicked;
 
     //For Rubbing
     private int rubbingDirection;
@@ -123,10 +124,14 @@ public class MooseActivity extends AppCompatActivity {
         tvInfo = findViewById(R.id.tvNote);
         tvInfo.setText("Please select Mode on PC");
 
+        divider = findViewById(R.id.divider);
+        divider.setX( (int)(2*(touchView.getWidth()/3.0)) );
+
         autoscroll = false;
         firstStroke = true;
        // trackPointFixed = false;
         timeLastMoved = 0;
+        timeLastFlicked = 0;
         flickGestureCount = 0;
         minX = 10000;
         minY = 10000;
@@ -212,13 +217,15 @@ public class MooseActivity extends AppCompatActivity {
                             // System.out.println("MOVED the only Finger in TouchView!");
                             return touchAction(pointerX, pointerY, MotionEvent.ACTION_MOVE);
 
+                        } else if(mode.equals("TrackPoint")) {
+                            touchAction(pointerX, pointerY, MotionEvent.ACTION_MOVE);
                         }
 
-                    }else if(mode.equals("TrackPoint")){
+                   }else if(mode.equals("TrackPoint")){
                         // stop for rate-based / trackpoint
                         Message newMessage = new Message("client", "TrackPoint", "stop");
                         communicator.sendMessage(newMessage.makeMessage());
-                    }
+                   }
 
                     break; //break for because we found the moving pointer!
                 }
@@ -250,6 +257,9 @@ public class MooseActivity extends AppCompatActivity {
                 //If only one finger it should be in the left part of the screen
                 } else if (pointerX <  maxLeftX )  {
                     return touchAction(pointerX, pointerY, MotionEvent.ACTION_UP);
+
+                }else if(mode.equals("TrackPoint")) {
+                    touchAction(pointerX, pointerY, MotionEvent.ACTION_UP);
                 }
 
             //if up is outside touch area
@@ -331,24 +341,27 @@ public class MooseActivity extends AppCompatActivity {
 
             switch (mode) {
                 case "iOS": {
-                    long timeBetweenGestures = System.currentTimeMillis() - timeLastMoved;
-                    if (timeBetweenGestures < 900) {
-                        flickGestureCount++;
-                    } else {
-                        flickGestureCount = 1;
-                        gain = 1;
-                    }
-                    lastVelocities = new double[]{0.0, 0.0, 0.0};
+                   // long timeBetweenGestures = System.currentTimeMillis() - timeLastMoved;
 
-                    timeLastMoved = System.currentTimeMillis();
+
+                    lastVelocities = new double[]{0.0, 0.0, 0.0};
                     totalDistance = 0;
-                    touchPointCounter = 2;
+                   // touchPointCounter = 2;
 
                     if (autoscroll) {
+                        Message newMessage = new Message("client", mode, "stop");
+                        communicator.sendMessage(newMessage.makeMessage());
+                        autoscroll = false;
+                        /*
                         System.out.println("Wait");
                         waitThread = new Thread(new WaitOnMovement_Thread(s_iOS));
                         waitThread.start();
+                        */
+
                     }
+
+                    timeLastMoved = System.currentTimeMillis();
+
 
                     break;
                 }
@@ -359,7 +372,7 @@ public class MooseActivity extends AppCompatActivity {
                     touchPointCounter = 1;
 
                     break;
-                case "Rubbing":
+                case "Rubbing": {
                     rubbingDirection = 0;
                     frequencies = new ArrayList<>(Arrays.asList(0.0, 0.0));
                     T1 = System.currentTimeMillis();
@@ -367,10 +380,11 @@ public class MooseActivity extends AppCompatActivity {
                     turnPointY = y;
 
                     break;
-
-                case "Drag":
+                }
+                case "Drag": {
                     touchPointCounter = 1;
                     break;
+                }
             }
 
         }else if(actionType == MotionEvent.ACTION_MOVE){
@@ -384,13 +398,13 @@ public class MooseActivity extends AppCompatActivity {
 
 
             switch (mode) {
-                case "Drag":
+                case "Drag": {
                     if (touchPointCounter % s_drag == 0) {
                         //** calculations
                         double deltaY = newYposition - lastYposition;
                         lastYposition = newYposition;
 
-                        double dragDelta = deltaY * g_drag ;  //no change of direction -> no * -1
+                        double dragDelta = deltaY * g_drag;  //no change of direction -> no * -1
 
                         //** send information
                         Message newMessage = new Message("client", "Drag", "deltaY");
@@ -400,7 +414,7 @@ public class MooseActivity extends AppCompatActivity {
                     touchPointCounter++;
 
                     break;
-
+                }
                 case "iOS": {
                     //touchPointCounter++;
                     //if (touchPointCounter % 3 == 0) {
@@ -408,34 +422,35 @@ public class MooseActivity extends AppCompatActivity {
                         double deltaY = newYposition - lastYposition;
                         lastYposition = newYposition;
                         totalDistance += deltaY;
+                        //System.out.println("Total Dist: " + totalDistance);
                         //System.out.println("finger move delta -- " + deltaY);
 
+                        Message newMessage = new Message("client", mode, "deltaY");
+                        newMessage.setValue(String.valueOf(deltaY));
+                        communicator.sendMessage(newMessage.makeMessage());
 
-                       /* System.out.println("TbG: " + timeBetweenGestures);
-                        //check if slowed down in movement -> stop auto-scroll start drag
-                        if( autoscroll && timeBetweenGestures > sensitivity){
-                            //continue dragging
-                            autoscroll = false;
-                            flickGestureCount = 1;
-                            gain = 1;
-                            Message newMessage = new Message("client", mode, "stop");
-                            communicator.sendMessage(newMessage.makeMessage());
-                        } */
+                        //save speed of the last three movements
+                        long timeBetweenMovement = System.currentTimeMillis() - timeLastMoved;
+                        double currentSpeed = deltaY / timeBetweenMovement;
+                        lastVelocities[2] = lastVelocities[1];
+                        lastVelocities[1] = lastVelocities[0];
+                        lastVelocities[0] = currentSpeed;
+                        // System.out.println("Current Speed: " + currentSpeed);
+                        timeLastMoved = System.currentTimeMillis();
 
+                        /*
                         //check if new flick -> interrupt wait
                         //if smaller 3 it might just be a little adaption of the finger
-                        if (autoscroll && Math.abs(deltaY) > 3) {
-                            if (!waitThread.isInterrupted()) {
-                                System.out.println("Interrupt wait thread");
-                                waitThread.interrupt();
-                            }
+                        if(autoscroll && waitThread.isAlive() && !waitThread.isInterrupted() && Math.abs(totalDistance) > 3){
+                            System.out.println("*** Interrupt wait thread");
+                            waitThread.interrupt();
 
-                        }else if (autoscroll && Math.abs(deltaY) < 3) {
+                        }else if (autoscroll && Math.abs(currentSpeed) < 2) {
                             //continue dragging
                             autoscroll = false;
                             flickGestureCount = 1;
                             gain = 1;
-                            System.out.println("Switch to Drag");
+                            System.out.println("*** Switch to Drag");
                             Message newMessage = new Message("client", mode, "stop");
                             communicator.sendMessage(newMessage.makeMessage());
                         }
@@ -446,14 +461,7 @@ public class MooseActivity extends AppCompatActivity {
                             Message newMessage = new Message("client", mode, "deltaY");
                             newMessage.setValue(String.valueOf(deltaY));
                             communicator.sendMessage(newMessage.makeMessage());
-                        }
-
-                        long timeBetweenGestures = System.currentTimeMillis() - timeLastMoved;
-                        lastVelocities[2] = lastVelocities[1];
-                        lastVelocities[1] = lastVelocities[0];
-                        lastVelocities[0] = deltaY / timeBetweenGestures;
-                        //System.out.println("Velocities: " + lastVelocities.toString());
-                        timeLastMoved = System.currentTimeMillis();
+                        } */
 
                     //}
                     break;
@@ -566,8 +574,18 @@ public class MooseActivity extends AppCompatActivity {
                         break;
                     }
 
-                    case "iOS":
-                        double Vt = ((lastVelocities[0] + lastVelocities[1])/2) - ((lastVelocities[0] - lastVelocities[1])/4);
+                    case "iOS": {
+                        //Set gesture counter right
+                        long timeBetweenFlicks = System.currentTimeMillis() - timeLastFlicked;
+                        if(timeLastFlicked != 0 && timeBetweenFlicks < 900) {
+                            flickGestureCount++;
+                        } else {
+                            flickGestureCount = 1;
+                            gain = 1;
+                        }
+                        System.out.println("Flick number: " + flickGestureCount);
+
+                        double Vt = ((lastVelocities[0] + lastVelocities[1]) / 2) - ((lastVelocities[0] - lastVelocities[1]) / 4);
                         // System.out.println("(1) Vt = " + Vt);
 
                         //250 points; one point is 1/163 of an inch;
@@ -578,16 +596,17 @@ public class MooseActivity extends AppCompatActivity {
                         double minSpeed_ms = minSpeed_sec / 1000;
                         System.out.println(" *Min speed = " + minSpeed_ms);
                         //todo maybe adapt?
-                        if(Math.abs(Vt) > minSpeed_ms){
-                            double Vt_minus1 = ((lastVelocities[1] + lastVelocities[2])/2) - ((lastVelocities[1] - lastVelocities[2])/4);
+                        if (Math.abs(Vt) > minSpeed_ms) {
+                            //ITS A FLICK !
+                            double Vt_minus1 = ((lastVelocities[1] + lastVelocities[2]) / 2) - ((lastVelocities[1] - lastVelocities[2]) / 4);
                             //1/4Vt + 3/4Vt−1, which is used as the flick velocity
-                            double flickVelocity = (Vt/4) + (3*Vt_minus1)/4;
+                            double flickVelocity = (Vt / 4) + (3 * Vt_minus1) / 4;
                             System.out.println("(2) Flick V " + flickVelocity);
 
                             //the value is incremented from the fourth contact onward
-                            if(flickGestureCount > 3) {
+                            if (flickGestureCount > 3) {
                                 // by 1/480 (k − 1) for each point of finger movement
-                                totalDistance += y-lastYposition;
+                                totalDistance += y - lastYposition;
                                 double pointsMoved = Math.abs(totalDistance / pxPerPoint);
                                 double incrementVal = ((flickGestureCount - 1) / 480.0) * pointsMoved;
                                 System.out.println("(2*) increment gain  " + incrementVal);
@@ -598,7 +617,7 @@ public class MooseActivity extends AppCompatActivity {
                             // until it reaches the cap. The cap is 1 before the fourth flick, 16 from the tenth onward
                             // cap(k) = cap(k − 1) + 0.45(k − 1) for the intervening values.
                             double cap = getCap(flickGestureCount);
-                           // System.out.println("(4) CapedGain = " + Math.min(cap, Math.abs(gain)));
+                            // System.out.println("(4) CapedGain = " + Math.min(cap, Math.abs(gain)));
 
                             double speed = Math.min(cap, Math.abs(gain)) * flickVelocity;
                             System.out.println("(3) Cap " + cap);
@@ -610,14 +629,17 @@ public class MooseActivity extends AppCompatActivity {
                             newMessage.setValue(String.valueOf(speed));
                             communicator.sendMessage(newMessage.makeMessage());
                             autoscroll = true;
+                            //Set time of last flick
+                            timeLastFlicked = System.currentTimeMillis();
 
-                        }else{
+                        } else {
                             System.out.println("NO FLICK! - too slow " + Math.abs(Vt));
                             autoscroll = false;
+                            timeLastFlicked = 0;
                         }
 
                         break;
-
+                    }
                 }
             }
 
@@ -747,6 +769,9 @@ public class MooseActivity extends AppCompatActivity {
                    maxX = 0;
                    maxY = 0;
                    fingerCount = 0;
+
+                   //this happens after each trial so reset some other vars:
+                   timeLastMoved = 0;
                }
 
 
