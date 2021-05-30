@@ -125,7 +125,13 @@ public class MooseActivity extends AppCompatActivity {
         tvInfo.setText("Please select Mode on PC");
 
         divider = findViewById(R.id.divider);
-        divider.setX( (int)(2*(touchView.getWidth()/3.0)) );
+        divider.post(new Runnable() {
+            @Override
+            public void run() {
+                divider.setX( (int)(2*(touchView.getWidth()/3.0)) );
+            }
+        });
+
 
         autoscroll = false;
         firstStroke = true;
@@ -341,27 +347,19 @@ public class MooseActivity extends AppCompatActivity {
 
             switch (mode) {
                 case "iOS": {
-                   // long timeBetweenGestures = System.currentTimeMillis() - timeLastMoved;
-
-
                     lastVelocities = new double[]{0.0, 0.0, 0.0};
                     totalDistance = 0;
-                   // touchPointCounter = 2;
 
                     if (autoscroll) {
+                        //stopping each time makes it a little less smooth sometimes but its better
+                        // than the issues that occurred when using wait thread..
+                        //also like this it is described in the paper
                         Message newMessage = new Message("client", mode, "stop");
                         communicator.sendMessage(newMessage.makeMessage());
                         autoscroll = false;
-                        /*
-                        System.out.println("Wait");
-                        waitThread = new Thread(new WaitOnMovement_Thread(s_iOS));
-                        waitThread.start();
-                        */
-
+                        //Wait thread was removed.
                     }
-
                     timeLastMoved = System.currentTimeMillis();
-
 
                     break;
                 }
@@ -416,54 +414,24 @@ public class MooseActivity extends AppCompatActivity {
                     break;
                 }
                 case "iOS": {
-                    //touchPointCounter++;
-                    //if (touchPointCounter % 3 == 0) {
-                        //** calculations
-                        double deltaY = newYposition - lastYposition;
-                        lastYposition = newYposition;
-                        totalDistance += deltaY;
-                        //System.out.println("Total Dist: " + totalDistance);
-                        //System.out.println("finger move delta -- " + deltaY);
+                    //** calculations
+                    double deltaY = newYposition - lastYposition;
+                    lastYposition = newYposition;
+                    totalDistance += deltaY;
 
-                        Message newMessage = new Message("client", mode, "deltaY");
-                        newMessage.setValue(String.valueOf(deltaY));
-                        communicator.sendMessage(newMessage.makeMessage());
+                    //Send movement data
+                    Message newMessage = new Message("client", mode, "deltaY");
+                    newMessage.setValue(String.valueOf(deltaY));
+                    communicator.sendMessage(newMessage.makeMessage());
 
-                        //save speed of the last three movements
-                        long timeBetweenMovement = System.currentTimeMillis() - timeLastMoved;
-                        double currentSpeed = deltaY / timeBetweenMovement;
-                        lastVelocities[2] = lastVelocities[1];
-                        lastVelocities[1] = lastVelocities[0];
-                        lastVelocities[0] = currentSpeed;
-                        // System.out.println("Current Speed: " + currentSpeed);
-                        timeLastMoved = System.currentTimeMillis();
+                    //save speed of the last three movements
+                    long timeBetweenMovement = System.currentTimeMillis() - timeLastMoved;
+                    double currentSpeed = deltaY / timeBetweenMovement;
+                    lastVelocities[2] = lastVelocities[1];
+                    lastVelocities[1] = lastVelocities[0];
+                    lastVelocities[0] = currentSpeed;
+                    timeLastMoved = System.currentTimeMillis();
 
-                        /*
-                        //check if new flick -> interrupt wait
-                        //if smaller 3 it might just be a little adaption of the finger
-                        if(autoscroll && waitThread.isAlive() && !waitThread.isInterrupted() && Math.abs(totalDistance) > 3){
-                            System.out.println("*** Interrupt wait thread");
-                            waitThread.interrupt();
-
-                        }else if (autoscroll && Math.abs(currentSpeed) < 2) {
-                            //continue dragging
-                            autoscroll = false;
-                            flickGestureCount = 1;
-                            gain = 1;
-                            System.out.println("*** Switch to Drag");
-                            Message newMessage = new Message("client", mode, "stop");
-                            communicator.sendMessage(newMessage.makeMessage());
-                        }
-
-                        if (!autoscroll) {
-                            //Note that input and output velocity are identical while the finger is in contact
-                            //** send information
-                            Message newMessage = new Message("client", mode, "deltaY");
-                            newMessage.setValue(String.valueOf(deltaY));
-                            communicator.sendMessage(newMessage.makeMessage());
-                        } */
-
-                    //}
                     break;
                 }
                 case "TrackPoint": {
@@ -772,41 +740,12 @@ public class MooseActivity extends AppCompatActivity {
 
                    //this happens after each trial so reset some other vars:
                    timeLastMoved = 0;
+                   timeLastFlicked = 0;
                }
 
 
             }else {
                 tvInfo.setText(status);
-            }
-        }
-    }
-
-    class WaitOnMovement_Thread implements Runnable {
-        int waitTime;
-
-        public WaitOnMovement_Thread(int sens){
-            waitTime = sens;
-        }
-
-        @Override
-        public void run() {
-            try {
-                Thread.sleep(waitTime);
-                thisActivity.runOnUiThread(new Runnable() {
-                    @Override
-                    public void run() {
-                        Message newMessage = new Message("client", mode, "stop");
-                        communicator.sendMessage(newMessage.makeMessage());
-                        System.out.println("Stop");
-                        autoscroll = false;
-                        flickGestureCount = 1;
-                        gain = 1;
-                    }
-                });
-
-            } catch (InterruptedException e) {
-                //we need this because when a sleep the interrupt from outside throws an exception
-                Thread.currentThread().interrupt();
             }
         }
     }

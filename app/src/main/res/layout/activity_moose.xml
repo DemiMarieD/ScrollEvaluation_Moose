@@ -41,7 +41,7 @@
 
         <View
             android:id="@+id/divider"
-            android:layout_width="1dp"
+            android:layout_width="2dp"
             android:layout_height="match_parent"
             android:background="@color/white"
             app:layout_constraintBottom_toBottomOf="parent"
