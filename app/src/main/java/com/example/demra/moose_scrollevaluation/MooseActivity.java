@@ -52,6 +52,7 @@ public class MooseActivity extends AppCompatActivity {
     private double maxX;
     private double maxY;
     private double fingerCount;
+    //private double clutchCount;
 
 
     // To find right finger pointer (aka left finger)
@@ -67,14 +68,12 @@ public class MooseActivity extends AppCompatActivity {
     private int touchPointCounter;
 
    // private int s_rubbing;
-    private int s_circle = 4;
-    private int s_iOS = 100;
-    private int s_drag = 5;
+    private int  s_circle = 4;
+    private int s_drag = 2; //todo remove ?
     private int s_ratebase = 1;
 
    // private double g_rubbing;
     private double g_circle = 80;
-   // private double g_iOS;
     private double g_drag = 1;
     private double g_ratebase = 1.5;
 
@@ -100,7 +99,7 @@ public class MooseActivity extends AppCompatActivity {
     private List<Double> frequencies;
     private long T1;
     private long timeLastMoved;
-    private int k = 2/3; //constant optimized empirically by Malacria
+    private double k = (2.0/3.0); //constant optimized empirically by Malacria
 
 
     @Override
@@ -144,6 +143,7 @@ public class MooseActivity extends AppCompatActivity {
         maxX = 0;
         maxY = 0;
         fingerCount = 0;
+       // clutchCount = 0;
 
         // ------ Set up communication
         communicator = Communicator.getInstance();
@@ -376,7 +376,7 @@ public class MooseActivity extends AppCompatActivity {
                     T1 = System.currentTimeMillis();
                     firstStroke = true;
                     turnPointY = y;
-
+                    System.out.println("--- Start ");
                     break;
                 }
                 case "Drag": {
@@ -482,6 +482,8 @@ public class MooseActivity extends AppCompatActivity {
                         if(currentDirection != rubbingDirection){
                             double strokeTime_sec = (double) (System.currentTimeMillis() - T1) / 1000;  // in sec
                             double amplitude = Math.abs(turnPointY - lastYposition);
+                            double speed_sec = (amplitude/strokeTime_sec);
+                            System.out.print((turnPointY - lastYposition) + ", ");
 
                             if(firstStroke){
                                 // "is activated only if the mean speed of the first stroke exceeds 50 pixels/sec" [Malacria2010]
@@ -497,6 +499,7 @@ public class MooseActivity extends AppCompatActivity {
 
                             turnPointY = lastYposition;
                             rubbingDirection = currentDirection;
+
                         }
 
                     }else{
@@ -526,6 +529,7 @@ public class MooseActivity extends AppCompatActivity {
             }
 
         }else if(actionType == MotionEvent.ACTION_UP){
+           // clutchCount++;
 
             if(!scrolling){
                 System.out.println("Click!");
@@ -561,7 +565,8 @@ public class MooseActivity extends AppCompatActivity {
                         double pxPerInch = metrics.ydpi; //The exact physical pixels per inch of the screen in the Y dimension
                         double pxPerPoint = pxPerInch / 163;
                         double minSpeed_sec = 250 * pxPerPoint;
-                        double minSpeed_ms = minSpeed_sec / 1000;
+                        System.out.println(" pxPpoint = " + pxPerPoint);
+                        double minSpeed_ms = minSpeed_sec / 1000;   //0.6504125770615654
                         System.out.println(" *Min speed = " + minSpeed_ms);
                         //todo maybe adapt?
                         if (Math.abs(Vt) > minSpeed_ms) {
@@ -632,11 +637,13 @@ public class MooseActivity extends AppCompatActivity {
     }
 
     public void sendNewStroke(double amplitude, double deltaT_sec){
-        double currentFrequency = 1 / (2 * deltaT_sec);
+        double currentFrequency = 1.0 / (2.0 * deltaT_sec);
         double sumFrequencies = frequencies.get(0) + frequencies.get(1) + currentFrequency;
-        double gain = Math.max(1, k * ((float) 1 / 3) * sumFrequencies);
-        System.out.println("Gain = " + gain);
+       // System.out.println("sumF " + sumFrequencies + " -- " + (k * (1.0 / 3.0) * sumFrequencies));
+        double gain = Math.max(1, k * ( 1.0 / 3.0) * sumFrequencies);
+       // System.out.println("Gain = " + gain); //(almost) always 1 !
         double distance = gain * amplitude * initialDirection;
+        System.out.print(distance + "\n");
 
         //** send information
         Message newMessage = new Message("client", "Rubbing", "deltaY");
@@ -726,7 +733,7 @@ public class MooseActivity extends AppCompatActivity {
                    // x/y-n-x/y,x/
                    String touchAreaDimensions =  (touchView.getX()+touchView.getWidth()) + "/" + (touchView.getY()+touchView.getHeight());
                    String minMaxPositions = minX + "/" + minY + "," + maxX + "/"+ maxY;
-                   String data = touchAreaDimensions + "-"+ fingerCount + "-" + minMaxPositions;
+                   String data = touchAreaDimensions + "-"+ fingerCount + "-" + minMaxPositions; // + "-" + clutchCount;
                    Message newMessage = new Message("client", "Data", "save");
                    newMessage.setValue(data);
                    communicator.sendMessage(newMessage.makeMessage());
@@ -737,6 +744,7 @@ public class MooseActivity extends AppCompatActivity {
                    maxX = 0;
                    maxY = 0;
                    fingerCount = 0;
+                 //  clutchCount = 0;
 
                    //this happens after each trial so reset some other vars:
                    timeLastMoved = 0;
